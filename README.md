@@ -222,6 +222,10 @@ python -m pytest tests/ -v
 
 ---
 
+## Landing Page
+
+🌐 **[optim-engine.vercel.app](https://v0-optim-engine-landing-page.vercel.app/)**
+
 ## Marketplace Listings
 
 - [MCPize](https://mcpize.com/mcp/optim-engine) — 6 MCP tools
