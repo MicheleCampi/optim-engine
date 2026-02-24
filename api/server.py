@@ -1,15 +1,12 @@
 """
 OptimEngine — FastAPI + MCP Server
-The interface layer: exposes scheduling and routing solvers as MCP tools for AI agents.
+Exposes scheduling, routing, and bin packing solvers as MCP tools for AI agents.
 
-Architecture:
-  FastAPI endpoints → fastapi-mcp auto-wraps → MCP protocol → AI agents discover & call
-
-Four tools exposed:
+Six tools exposed:
   1. optimize_schedule — Solve a Flexible Job Shop Scheduling Problem
-  2. validate_schedule — Validate an existing schedule against constraints
-  3. optimize_routing  — Solve a Capacitated Vehicle Routing Problem with Time Windows
-  4. validate_routing  — Validate an existing routing solution (coming soon)
+  2. validate_schedule — Validate an existing schedule
+  3. optimize_routing  — Solve a CVRPTW
+  4. optimize_packing  — Solve a Bin Packing Problem
 """
 
 import os
@@ -34,32 +31,30 @@ from routing.models import (
 )
 from routing.engine import solve_routing
 
+from packing.models import (
+    PackingRequest, PackingResponse,
+    PackingStatus,
+)
+from packing.engine import solve_packing
 
-# ─────────────────────────────────────────────
-# App Configuration
-# ─────────────────────────────────────────────
 
 APP_NAME = "OptimEngine"
-APP_VERSION = "2.0.0"
+APP_VERSION = "3.0.0"
 APP_DESCRIPTION = """
 **Operations Intelligence Solver** — An MCP-native optimization engine.
 
-Two solver modules for AI agents:
+Three solver modules for AI agents:
 
 ### 1. Scheduling (Flexible Job Shop)
-Solves Flexible Job Shop Scheduling Problems using Google OR-Tools CP-SAT.
-Assign tasks to machines optimally with precedence, time windows, machine eligibility,
-setup times, priorities, and multiple objectives (makespan, tardiness, load balance).
+Assign tasks to machines optimally with precedence, time windows, setup times, priorities.
 
 ### 2. Routing (CVRPTW)
-Solves Capacitated Vehicle Routing Problems with Time Windows using OR-Tools routing solver.
-Assign delivery locations to vehicles optimally with capacity constraints, time windows,
-service times, and multiple objectives (distance, time, vehicle count, route balance).
+Assign delivery locations to vehicles with capacity constraints and time windows.
 
-### Designed for AI Agents
-Both solvers are exposed as MCP tools. An AI agent receives an optimization request
-in natural language, translates it to structured JSON, calls the appropriate tool,
-and returns the optimized solution to the user.
+### 3. Bin Packing
+Assign items to bins/containers optimally with weight, volume, and group constraints.
+
+All solvers use Google OR-Tools and are exposed as MCP tools for AI agent discovery.
 """
 
 
@@ -88,14 +83,10 @@ app.add_middleware(
 )
 
 
-# ─────────────────────────────────────────────
-# Request tracking middleware
-# ─────────────────────────────────────────────
-
 _request_count = 0
 _total_solve_time = 0.0
 
-TRACKED_PATHS = ("/optimize_schedule", "/validate_schedule", "/optimize_routing")
+TRACKED_PATHS = ("/optimize_schedule", "/validate_schedule", "/optimize_routing", "/optimize_packing")
 
 
 @app.middleware("http")
@@ -110,10 +101,6 @@ async def track_requests(request: Request, call_next):
     return response
 
 
-# ─────────────────────────────────────────────
-# Health & Info Endpoints
-# ─────────────────────────────────────────────
-
 @app.get("/", operation_id="root", summary="Server info and status")
 async def root():
     return {
@@ -121,21 +108,10 @@ async def root():
         "version": APP_VERSION,
         "status": "operational",
         "tools": [
-            {
-                "name": "optimize_schedule",
-                "description": "Solve a Flexible Job Shop Scheduling Problem. Assign tasks to machines optimally.",
-                "endpoint": "/optimize_schedule",
-            },
-            {
-                "name": "validate_schedule",
-                "description": "Validate an existing schedule against constraints.",
-                "endpoint": "/validate_schedule",
-            },
-            {
-                "name": "optimize_routing",
-                "description": "Solve a CVRPTW. Assign delivery locations to vehicles optimally with capacity and time windows.",
-                "endpoint": "/optimize_routing",
-            },
+            {"name": "optimize_schedule", "description": "Solve a Flexible Job Shop Scheduling Problem.", "endpoint": "/optimize_schedule"},
+            {"name": "validate_schedule", "description": "Validate an existing schedule against constraints.", "endpoint": "/validate_schedule"},
+            {"name": "optimize_routing", "description": "Solve a CVRPTW. Assign deliveries to vehicles optimally.", "endpoint": "/optimize_routing"},
+            {"name": "optimize_packing", "description": "Solve a Bin Packing problem. Assign items to bins optimally.", "endpoint": "/optimize_packing"},
         ],
         "stats": {
             "requests_served": _request_count,
@@ -151,7 +127,7 @@ async def health():
 
 
 # ─────────────────────────────────────────────
-# Scheduling Tool Endpoints
+# Scheduling
 # ─────────────────────────────────────────────
 
 @app.post(
@@ -159,28 +135,7 @@ async def health():
     response_model=ScheduleResponse,
     operation_id="optimize_schedule",
     summary="Solve a Flexible Job Shop Scheduling Problem",
-    description="""
-Solves a scheduling optimization problem using constraint programming (OR-Tools CP-SAT).
-
-**Input**: Jobs with ordered tasks, machines, constraints, and optimization objective.
-**Output**: Optimized schedule with task assignments, timing, metrics, and Gantt chart data.
-
-**Supported objectives**: minimize_makespan (default), minimize_total_tardiness, minimize_max_tardiness, balance_load.
-
-**Constraints**: Task precedence, machine eligibility, no-overlap, time windows, machine availability, setup times, priorities.
-
-**Example**:
-```json
-{
-  "jobs": [
-    {"job_id": "J1", "tasks": [{"task_id": "cut", "duration": 3, "eligible_machines": ["M1"]}, {"task_id": "weld", "duration": 2, "eligible_machines": ["M2"]}]},
-    {"job_id": "J2", "tasks": [{"task_id": "cut", "duration": 2, "eligible_machines": ["M1"]}, {"task_id": "weld", "duration": 4, "eligible_machines": ["M2"]}]}
-  ],
-  "machines": [{"machine_id": "M1"}, {"machine_id": "M2"}],
-  "objective": "minimize_makespan"
-}
-```
-""",
+    description="Solves scheduling using OR-Tools CP-SAT. Supports precedence, time windows, machine eligibility, setup times, priorities, and 4 objectives.",
     tags=["Scheduling"],
 )
 async def optimize_schedule_endpoint(request: ScheduleRequest) -> ScheduleResponse:
@@ -191,12 +146,8 @@ async def optimize_schedule_endpoint(request: ScheduleRequest) -> ScheduleRespon
     "/validate_schedule",
     response_model=ValidateResponse,
     operation_id="validate_schedule",
-    summary="Validate an existing schedule against constraints",
-    description="""
-Validates a schedule against job/machine constraints. Checks consistency, machine eligibility,
-no-overlap, precedence, time windows, and machine availability.
-Returns violation report, metrics, and improvement suggestions.
-""",
+    summary="Validate an existing schedule",
+    description="Validates a schedule against job/machine constraints. Returns violations and improvement suggestions.",
     tags=["Scheduling"],
 )
 async def validate_schedule_endpoint(request: ValidateRequest) -> ValidateResponse:
@@ -204,62 +155,35 @@ async def validate_schedule_endpoint(request: ValidateRequest) -> ValidateRespon
 
 
 # ─────────────────────────────────────────────
-# Routing Tool Endpoints
+# Routing
 # ─────────────────────────────────────────────
 
 @app.post(
     "/optimize_routing",
     response_model=RoutingResponse,
     operation_id="optimize_routing",
-    summary="Solve a Capacitated Vehicle Routing Problem with Time Windows (CVRPTW)",
-    description="""
-Solves a vehicle routing optimization problem using OR-Tools routing solver.
-
-**Input**: Depot, delivery locations with demands and time windows, vehicles with capacity.
-**Output**: Optimized routes per vehicle with stop order, arrival/departure times, load tracking, and aggregate metrics.
-
-**Supported objectives**: minimize_total_distance (default), minimize_total_time, minimize_vehicles, balance_routes.
-
-**Constraints**: Vehicle capacity, time windows per location, service times, max travel time/distance per vehicle, pickup demands.
-
-**Features**: Custom or coordinate-based distance matrix, Haversine GPS distance, drop infeasible visits with penalty.
-
-**Example — 3 deliveries, 2 vehicles**:
-```json
-{
-  "depot_id": "warehouse",
-  "locations": [
-    {"location_id": "warehouse", "demand": 0},
-    {"location_id": "customer_A", "demand": 20, "time_window_start": 0, "time_window_end": 3000, "service_time": 10},
-    {"location_id": "customer_B", "demand": 15, "time_window_start": 500, "time_window_end": 4000, "service_time": 10},
-    {"location_id": "customer_C", "demand": 25, "time_window_start": 0, "time_window_end": 5000, "service_time": 15}
-  ],
-  "vehicles": [
-    {"vehicle_id": "truck_1", "capacity": 40},
-    {"vehicle_id": "truck_2", "capacity": 40}
-  ],
-  "distance_matrix": [
-    {"from_id": "warehouse", "to_id": "customer_A", "distance": 500, "travel_time": 500},
-    {"from_id": "warehouse", "to_id": "customer_B", "distance": 800, "travel_time": 800},
-    {"from_id": "warehouse", "to_id": "customer_C", "distance": 600, "travel_time": 600},
-    {"from_id": "customer_A", "to_id": "warehouse", "distance": 500, "travel_time": 500},
-    {"from_id": "customer_A", "to_id": "customer_B", "distance": 400, "travel_time": 400},
-    {"from_id": "customer_A", "to_id": "customer_C", "distance": 700, "travel_time": 700},
-    {"from_id": "customer_B", "to_id": "warehouse", "distance": 800, "travel_time": 800},
-    {"from_id": "customer_B", "to_id": "customer_A", "distance": 400, "travel_time": 400},
-    {"from_id": "customer_B", "to_id": "customer_C", "distance": 300, "travel_time": 300},
-    {"from_id": "customer_C", "to_id": "warehouse", "distance": 600, "travel_time": 600},
-    {"from_id": "customer_C", "to_id": "customer_A", "distance": 700, "travel_time": 700},
-    {"from_id": "customer_C", "to_id": "customer_B", "distance": 300, "travel_time": 300}
-  ],
-  "objective": "minimize_total_distance"
-}
-```
-""",
+    summary="Solve a CVRPTW (Vehicle Routing with Time Windows)",
+    description="Solves vehicle routing using OR-Tools. Supports capacity, time windows, service times, GPS coordinates, drop visits, and 4 objectives.",
     tags=["Routing"],
 )
 async def optimize_routing_endpoint(request: RoutingRequest) -> RoutingResponse:
     return solve_routing(request)
+
+
+# ─────────────────────────────────────────────
+# Packing
+# ─────────────────────────────────────────────
+
+@app.post(
+    "/optimize_packing",
+    response_model=PackingResponse,
+    operation_id="optimize_packing",
+    summary="Solve a Bin Packing Problem",
+    description="Solves bin packing using OR-Tools CP-SAT. Supports weight/volume constraints, item quantities, group constraints, partial packing, and 4 objectives (minimize bins, maximize value/items, balance load).",
+    tags=["Packing"],
+)
+async def optimize_packing_endpoint(request: PackingRequest) -> PackingResponse:
+    return solve_packing(request)
 
 
 # ─────────────────────────────────────────────
@@ -300,11 +224,10 @@ try:
         app,
         name="OptimEngine",
         description=(
-            "Operations Intelligence Solver — solves Flexible Job Shop Scheduling (CP-SAT) "
-            "and Capacitated Vehicle Routing with Time Windows (CVRPTW). "
-            "Assign tasks to machines or deliveries to vehicles optimally. "
-            "Supports precedence, time windows, capacity, machine eligibility, "
-            "setup times, and multiple objectives."
+            "Operations Intelligence Solver — Scheduling (FJSP), "
+            "Vehicle Routing (CVRPTW), and Bin Packing. "
+            "Assign tasks to machines, deliveries to vehicles, or items to bins optimally. "
+            "All solvers powered by Google OR-Tools."
         ),
         describe_all_responses=True,
         describe_full_response_schema=True,
@@ -316,10 +239,6 @@ except ImportError:
 except Exception as e:
     print(f"⚠️  MCP mount failed: {e}. Server running without MCP.")
 
-
-# ─────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
