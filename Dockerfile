@@ -9,5 +9,6 @@ COPY sensitivity/ sensitivity/
 COPY robust/ robust/
 COPY stochastic/ stochastic/
 COPY pareto/ pareto/
+COPY prescriptive/ prescriptive/
 COPY api/ api/
 CMD ["sh", "-c", "uvicorn api.server:app --host 0.0.0.0 --port ${PORT} --workers 1"]
