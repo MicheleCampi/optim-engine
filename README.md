@@ -182,7 +182,7 @@ python -m pytest tests/ -v
 
 ## Landing Page
 
-🌐 **[optim-engine.vercel.app](https://v0-optim-engine-landing-page.vercel.app/)**
+🌐 **[optim-engine.vercel.app](https://optim-engine-landing.vercel.app/)**
 
 ## Marketplace Listings
 
