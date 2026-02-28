@@ -1,12 +1,13 @@
 """
 OptimEngine — FastAPI + MCP Server
-Exposes scheduling, routing, and bin packing solvers as MCP tools for AI agents.
+Exposes scheduling, routing, packing, and sensitivity analysis as MCP tools.
 
-Six tools exposed:
-  1. optimize_schedule — Solve a Flexible Job Shop Scheduling Problem
-  2. validate_schedule — Validate an existing schedule
-  3. optimize_routing  — Solve a CVRPTW
-  4. optimize_packing  — Solve a Bin Packing Problem
+Seven tools exposed:
+  1. optimize_schedule   — Solve a Flexible Job Shop Scheduling Problem
+  2. validate_schedule   — Validate an existing schedule
+  3. optimize_routing    — Solve a CVRPTW
+  4. optimize_packing    — Solve a Bin Packing Problem
+  5. analyze_sensitivity — Parametric sensitivity analysis
 """
 
 import os
@@ -18,32 +19,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from solver.models import (
-    ScheduleRequest, ScheduleResponse,
-    ValidateRequest, ValidateResponse,
-    SolverStatus,
+    ScheduleRequest, ScheduleResponse, SolverStatus,
 )
 from solver.engine import solve_schedule
 from solver.validator import validate_schedule
+from solver.models import ValidateRequest, ValidateResponse
 
-from routing.models import (
-    RoutingRequest, RoutingResponse,
-    RoutingStatus,
-)
+from routing.models import RoutingRequest, RoutingResponse, RoutingStatus
 from routing.engine import solve_routing
 
-from packing.models import (
-    PackingRequest, PackingResponse,
-    PackingStatus,
-)
+from packing.models import PackingRequest, PackingResponse, PackingStatus
 from packing.engine import solve_packing
+
+from sensitivity.models import SensitivityRequest, SensitivityResponse
+from sensitivity.engine import analyze_sensitivity as run_sensitivity
 
 
 APP_NAME = "OptimEngine"
-APP_VERSION = "3.0.0"
+APP_VERSION = "4.0.0"
 APP_DESCRIPTION = """
 **Operations Intelligence Solver** — An MCP-native optimization engine.
 
-Three solver modules for AI agents:
+Four solver modules for AI agents:
 
 ### 1. Scheduling (Flexible Job Shop)
 Assign tasks to machines optimally with precedence, time windows, setup times, priorities.
@@ -53,6 +50,10 @@ Assign delivery locations to vehicles with capacity constraints and time windows
 
 ### 3. Bin Packing
 Assign items to bins/containers optimally with weight, volume, and group constraints.
+
+### 4. Sensitivity Analysis
+Parametric perturbation analysis: perturb parameters, re-solve, and produce risk maps.
+Answers: "Which parameters, if they change, break the plan?"
 
 All solvers use Google OR-Tools and are exposed as MCP tools for AI agent discovery.
 """
@@ -86,7 +87,11 @@ app.add_middleware(
 _request_count = 0
 _total_solve_time = 0.0
 
-TRACKED_PATHS = ("/optimize_schedule", "/validate_schedule", "/optimize_routing", "/optimize_packing")
+TRACKED_PATHS = (
+    "/optimize_schedule", "/validate_schedule",
+    "/optimize_routing", "/optimize_packing",
+    "/analyze_sensitivity",
+)
 
 
 @app.middleware("http")
@@ -112,6 +117,7 @@ async def root():
             {"name": "validate_schedule", "description": "Validate an existing schedule against constraints.", "endpoint": "/validate_schedule"},
             {"name": "optimize_routing", "description": "Solve a CVRPTW. Assign deliveries to vehicles optimally.", "endpoint": "/optimize_routing"},
             {"name": "optimize_packing", "description": "Solve a Bin Packing problem. Assign items to bins optimally.", "endpoint": "/optimize_packing"},
+            {"name": "analyze_sensitivity", "description": "Parametric sensitivity analysis. Find which parameters break the plan.", "endpoint": "/analyze_sensitivity"},
         ],
         "stats": {
             "requests_served": _request_count,
@@ -179,11 +185,32 @@ async def optimize_routing_endpoint(request: RoutingRequest) -> RoutingResponse:
     response_model=PackingResponse,
     operation_id="optimize_packing",
     summary="Solve a Bin Packing Problem",
-    description="Solves bin packing using OR-Tools CP-SAT. Supports weight/volume constraints, item quantities, group constraints, partial packing, and 4 objectives (minimize bins, maximize value/items, balance load).",
+    description="Solves bin packing using OR-Tools CP-SAT. Supports weight/volume constraints, item quantities, group constraints, partial packing, and 4 objectives.",
     tags=["Packing"],
 )
 async def optimize_packing_endpoint(request: PackingRequest) -> PackingResponse:
     return solve_packing(request)
+
+
+# ─────────────────────────────────────────────
+# Sensitivity Analysis
+# ─────────────────────────────────────────────
+
+@app.post(
+    "/analyze_sensitivity",
+    response_model=SensitivityResponse,
+    operation_id="analyze_sensitivity",
+    summary="Parametric Sensitivity Analysis",
+    description=(
+        "Perturbs parameters one at a time across any solver (scheduling, routing, packing), "
+        "re-solves, and produces a fragility map. Answers: 'Which parameters, if they change, "
+        "break the plan?' Returns sensitivity scores, elasticity, risk ranking, and critical flags. "
+        "Auto-detects parameters if none specified."
+    ),
+    tags=["Sensitivity"],
+)
+async def analyze_sensitivity_endpoint(request: SensitivityRequest) -> SensitivityResponse:
+    return run_sensitivity(request)
 
 
 # ─────────────────────────────────────────────
@@ -225,8 +252,9 @@ try:
         name="OptimEngine",
         description=(
             "Operations Intelligence Solver — Scheduling (FJSP), "
-            "Vehicle Routing (CVRPTW), and Bin Packing. "
+            "Vehicle Routing (CVRPTW), Bin Packing, and Sensitivity Analysis. "
             "Assign tasks to machines, deliveries to vehicles, or items to bins optimally. "
+            "Analyze parameter sensitivity to find which inputs break the plan. "
             "All solvers powered by Google OR-Tools."
         ),
         describe_all_responses=True,
