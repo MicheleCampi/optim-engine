@@ -1,6 +1,6 @@
 """
-OptimEngine — FastAPI + MCP Server v5.0.0
-Exposes scheduling, routing, packing, sensitivity, and robust optimization as MCP tools.
+OptimEngine — FastAPI + MCP Server v6.0.0
+Operations Intelligence Solver with L2 uncertainty capabilities.
 """
 
 import os
@@ -28,30 +28,28 @@ from sensitivity.engine import analyze_sensitivity as run_sensitivity
 from robust.models import RobustRequest, RobustResponse
 from robust.engine import optimize_robust as run_robust
 
+from stochastic.models import StochasticRequest, StochasticResponse
+from stochastic.engine import optimize_stochastic as run_stochastic
+
 
 APP_NAME = "OptimEngine"
-APP_VERSION = "5.0.0"
+APP_VERSION = "6.0.0"
 APP_DESCRIPTION = """
-**Operations Intelligence Solver** — An MCP-native optimization engine.
+**Operations Intelligence Solver** — An MCP-native optimization engine with uncertainty capabilities.
 
-Five modules for AI agents:
+Six modules for AI agents:
 
-### 1. Scheduling (Flexible Job Shop)
-Assign tasks to machines optimally with precedence, time windows, setup times, priorities.
+### Level 1 — Deterministic Optimization
+1. **Scheduling** (Flexible Job Shop) — Assign tasks to machines optimally.
+2. **Routing** (CVRPTW) — Assign deliveries to vehicles optimally.
+3. **Bin Packing** — Assign items to bins/containers optimally.
 
-### 2. Routing (CVRPTW)
-Assign delivery locations to vehicles with capacity constraints and time windows.
+### Level 2 — Optimization under Uncertainty
+4. **Sensitivity Analysis** — Find which parameters break the plan.
+5. **Robust Optimization** — Find plans that survive worst-case scenarios.
+6. **Stochastic Optimization** — Monte Carlo simulation with CVaR risk metrics.
 
-### 3. Bin Packing
-Assign items to bins/containers optimally with weight, volume, and group constraints.
-
-### 4. Sensitivity Analysis
-Parametric perturbation analysis: find which parameters break the plan.
-
-### 5. Robust Optimization
-Scenario-based optimization under uncertainty: find plans that survive worst-case outcomes.
-
-All solvers use Google OR-Tools and are exposed as MCP tools for AI agent discovery.
+All solvers use Google OR-Tools. Exposed as MCP tools for AI agent discovery.
 """
 
 
@@ -87,6 +85,7 @@ TRACKED_PATHS = (
     "/optimize_schedule", "/validate_schedule",
     "/optimize_routing", "/optimize_packing",
     "/analyze_sensitivity", "/optimize_robust",
+    "/optimize_stochastic",
 )
 
 
@@ -108,13 +107,18 @@ async def root():
         "name": APP_NAME,
         "version": APP_VERSION,
         "status": "operational",
+        "capabilities": {
+            "level_1": "Deterministic Optimization (scheduling, routing, packing)",
+            "level_2": "Optimization under Uncertainty (sensitivity, robust, stochastic)",
+        },
         "tools": [
             {"name": "optimize_schedule", "description": "Solve a Flexible Job Shop Scheduling Problem.", "endpoint": "/optimize_schedule"},
             {"name": "validate_schedule", "description": "Validate an existing schedule against constraints.", "endpoint": "/validate_schedule"},
             {"name": "optimize_routing", "description": "Solve a CVRPTW. Assign deliveries to vehicles optimally.", "endpoint": "/optimize_routing"},
             {"name": "optimize_packing", "description": "Solve a Bin Packing problem. Assign items to bins optimally.", "endpoint": "/optimize_packing"},
             {"name": "analyze_sensitivity", "description": "Parametric sensitivity analysis. Find which parameters break the plan.", "endpoint": "/analyze_sensitivity"},
-            {"name": "optimize_robust", "description": "Robust optimization under uncertainty. Find plans that survive worst-case scenarios.", "endpoint": "/optimize_robust"},
+            {"name": "optimize_robust", "description": "Robust optimization under uncertainty. Worst-case protection.", "endpoint": "/optimize_robust"},
+            {"name": "optimize_stochastic", "description": "Stochastic optimization. Monte Carlo + CVaR risk metrics.", "endpoint": "/optimize_stochastic"},
         ],
         "stats": {
             "requests_served": _request_count,
@@ -129,151 +133,99 @@ async def health():
     return {"status": "healthy", "version": APP_VERSION}
 
 
-# ─────────────────────────────────────────────
-# Scheduling
-# ─────────────────────────────────────────────
+# ─── L1: Scheduling ───
 
-@app.post(
-    "/optimize_schedule",
-    response_model=ScheduleResponse,
-    operation_id="optimize_schedule",
+@app.post("/optimize_schedule", response_model=ScheduleResponse, operation_id="optimize_schedule",
     summary="Solve a Flexible Job Shop Scheduling Problem",
-    description="Solves scheduling using OR-Tools CP-SAT. Supports precedence, time windows, machine eligibility, setup times, priorities, and 4 objectives.",
-    tags=["Scheduling"],
-)
+    description="OR-Tools CP-SAT. Precedence, time windows, machine eligibility, setup times, priorities, 4 objectives.",
+    tags=["L1 - Scheduling"])
 async def optimize_schedule_endpoint(request: ScheduleRequest) -> ScheduleResponse:
     return solve_schedule(request)
 
-
-@app.post(
-    "/validate_schedule",
-    response_model=ValidateResponse,
-    operation_id="validate_schedule",
+@app.post("/validate_schedule", response_model=ValidateResponse, operation_id="validate_schedule",
     summary="Validate an existing schedule",
-    description="Validates a schedule against job/machine constraints. Returns violations and improvement suggestions.",
-    tags=["Scheduling"],
-)
+    description="Validates against job/machine constraints. Returns violations and suggestions.",
+    tags=["L1 - Scheduling"])
 async def validate_schedule_endpoint(request: ValidateRequest) -> ValidateResponse:
     return validate_schedule(request)
 
 
-# ─────────────────────────────────────────────
-# Routing
-# ─────────────────────────────────────────────
+# ─── L1: Routing ───
 
-@app.post(
-    "/optimize_routing",
-    response_model=RoutingResponse,
-    operation_id="optimize_routing",
-    summary="Solve a CVRPTW (Vehicle Routing with Time Windows)",
-    description="Solves vehicle routing using OR-Tools. Supports capacity, time windows, service times, GPS coordinates, drop visits, and 4 objectives.",
-    tags=["Routing"],
-)
+@app.post("/optimize_routing", response_model=RoutingResponse, operation_id="optimize_routing",
+    summary="Solve a CVRPTW",
+    description="OR-Tools Routing. Capacity, time windows, GPS, drop visits, 4 objectives.",
+    tags=["L1 - Routing"])
 async def optimize_routing_endpoint(request: RoutingRequest) -> RoutingResponse:
     return solve_routing(request)
 
 
-# ─────────────────────────────────────────────
-# Packing
-# ─────────────────────────────────────────────
+# ─── L1: Packing ───
 
-@app.post(
-    "/optimize_packing",
-    response_model=PackingResponse,
-    operation_id="optimize_packing",
+@app.post("/optimize_packing", response_model=PackingResponse, operation_id="optimize_packing",
     summary="Solve a Bin Packing Problem",
-    description="Solves bin packing using OR-Tools CP-SAT. Supports weight/volume constraints, item quantities, group constraints, partial packing, and 4 objectives.",
-    tags=["Packing"],
-)
+    description="OR-Tools CP-SAT. Weight/volume, quantities, groups, partial packing, 4 objectives.",
+    tags=["L1 - Packing"])
 async def optimize_packing_endpoint(request: PackingRequest) -> PackingResponse:
     return solve_packing(request)
 
 
-# ─────────────────────────────────────────────
-# Sensitivity Analysis
-# ─────────────────────────────────────────────
+# ─── L2: Sensitivity ───
 
-@app.post(
-    "/analyze_sensitivity",
-    response_model=SensitivityResponse,
-    operation_id="analyze_sensitivity",
+@app.post("/analyze_sensitivity", response_model=SensitivityResponse, operation_id="analyze_sensitivity",
     summary="Parametric Sensitivity Analysis",
-    description=(
-        "Perturbs parameters one at a time across any solver (scheduling, routing, packing), "
-        "re-solves, and produces a fragility map. Returns sensitivity scores, elasticity, "
-        "risk ranking, and critical flags. Auto-detects parameters if none specified."
-    ),
-    tags=["Sensitivity"],
-)
+    description="Perturbs parameters across any L1 solver. Returns sensitivity scores, elasticity, risk ranking, critical flags.",
+    tags=["L2 - Uncertainty"])
 async def analyze_sensitivity_endpoint(request: SensitivityRequest) -> SensitivityResponse:
     return run_sensitivity(request)
 
 
-# ─────────────────────────────────────────────
-# Robust Optimization
-# ─────────────────────────────────────────────
+# ─── L2: Robust ───
 
-@app.post(
-    "/optimize_robust",
-    response_model=RobustResponse,
-    operation_id="optimize_robust",
+@app.post("/optimize_robust", response_model=RobustResponse, operation_id="optimize_robust",
     summary="Robust Optimization under Uncertainty",
-    description=(
-        "Scenario-based robust optimization. Specify uncertainty ranges for parameters, "
-        "and the engine generates scenarios, solves each, and recommends a solution that "
-        "protects against worst-case outcomes. Returns price of robustness, feasibility rate, "
-        "percentiles, and human-readable recommendations. "
-        "Modes: worst_case, percentile_90/95, regret_minimization."
-    ),
-    tags=["Robust"],
-)
+    description="Scenario-based worst-case protection. Modes: worst_case, percentile_90/95, regret_minimization. Returns price of robustness.",
+    tags=["L2 - Uncertainty"])
 async def optimize_robust_endpoint(request: RobustRequest) -> RobustResponse:
     return run_robust(request)
 
 
-# ─────────────────────────────────────────────
-# Error Handlers
-# ─────────────────────────────────────────────
+# ─── L2: Stochastic ───
+
+@app.post("/optimize_stochastic", response_model=StochasticResponse, operation_id="optimize_stochastic",
+    summary="Stochastic Optimization (Monte Carlo + CVaR)",
+    description=(
+        "Monte Carlo simulation with probabilistic risk metrics. "
+        "Supports normal, uniform, triangular, log-normal distributions. "
+        "Returns expected value, VaR, CVaR (90/95/99%), distribution summary, "
+        "and risk-aware recommendations."
+    ),
+    tags=["L2 - Uncertainty"])
+async def optimize_stochastic_endpoint(request: StochasticRequest) -> StochasticResponse:
+    return run_stochastic(request)
+
+
+# ─── Error Handlers ───
 
 @app.exception_handler(422)
 async def validation_error_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "status": "error",
-            "message": "Invalid request format. Check the schema at /docs for required fields.",
-            "details": str(exc),
-        },
-    )
-
+    return JSONResponse(status_code=422, content={"status": "error", "message": "Invalid request format.", "details": str(exc)})
 
 @app.exception_handler(500)
 async def internal_error_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={
-            "status": "error",
-            "message": "Internal server error. Please try again or contact support.",
-        },
-    )
+    return JSONResponse(status_code=500, content={"status": "error", "message": "Internal server error."})
 
 
-# ─────────────────────────────────────────────
-# MCP Integration
-# ─────────────────────────────────────────────
+# ─── MCP Integration ───
 
 try:
     from fastapi_mcp import FastApiMCP
-
     mcp = FastApiMCP(
         app,
         name="OptimEngine",
         description=(
-            "Operations Intelligence Solver — Scheduling (FJSP), "
-            "Vehicle Routing (CVRPTW), Bin Packing, Sensitivity Analysis, "
-            "and Robust Optimization under Uncertainty. "
-            "Assign tasks to machines, deliveries to vehicles, or items to bins optimally. "
-            "Analyze sensitivity and optimize under uncertainty. "
+            "Operations Intelligence Solver — L1: Scheduling (FJSP), Routing (CVRPTW), Bin Packing. "
+            "L2: Sensitivity Analysis, Robust Optimization, Stochastic Optimization (Monte Carlo + CVaR). "
             "All solvers powered by Google OR-Tools."
         ),
         describe_all_responses=True,

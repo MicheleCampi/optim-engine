@@ -7,6 +7,7 @@ COPY routing/ routing/
 COPY packing/ packing/
 COPY sensitivity/ sensitivity/
 COPY robust/ robust/
+COPY stochastic/ stochastic/
 COPY api/ api/
 ENV PORT=8080
 EXPOSE 8080
