@@ -1,13 +1,6 @@
 """
-OptimEngine — FastAPI + MCP Server
-Exposes scheduling, routing, packing, and sensitivity analysis as MCP tools.
-
-Seven tools exposed:
-  1. optimize_schedule   — Solve a Flexible Job Shop Scheduling Problem
-  2. validate_schedule   — Validate an existing schedule
-  3. optimize_routing    — Solve a CVRPTW
-  4. optimize_packing    — Solve a Bin Packing Problem
-  5. analyze_sensitivity — Parametric sensitivity analysis
+OptimEngine — FastAPI + MCP Server v5.0.0
+Exposes scheduling, routing, packing, sensitivity, and robust optimization as MCP tools.
 """
 
 import os
@@ -18,12 +11,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from solver.models import (
-    ScheduleRequest, ScheduleResponse, SolverStatus,
-)
+from solver.models import ScheduleRequest, ScheduleResponse, SolverStatus
 from solver.engine import solve_schedule
-from solver.validator import validate_schedule
 from solver.models import ValidateRequest, ValidateResponse
+from solver.validator import validate_schedule
 
 from routing.models import RoutingRequest, RoutingResponse, RoutingStatus
 from routing.engine import solve_routing
@@ -34,13 +25,16 @@ from packing.engine import solve_packing
 from sensitivity.models import SensitivityRequest, SensitivityResponse
 from sensitivity.engine import analyze_sensitivity as run_sensitivity
 
+from robust.models import RobustRequest, RobustResponse
+from robust.engine import optimize_robust as run_robust
+
 
 APP_NAME = "OptimEngine"
-APP_VERSION = "4.0.0"
+APP_VERSION = "5.0.0"
 APP_DESCRIPTION = """
 **Operations Intelligence Solver** — An MCP-native optimization engine.
 
-Four solver modules for AI agents:
+Five modules for AI agents:
 
 ### 1. Scheduling (Flexible Job Shop)
 Assign tasks to machines optimally with precedence, time windows, setup times, priorities.
@@ -52,8 +46,10 @@ Assign delivery locations to vehicles with capacity constraints and time windows
 Assign items to bins/containers optimally with weight, volume, and group constraints.
 
 ### 4. Sensitivity Analysis
-Parametric perturbation analysis: perturb parameters, re-solve, and produce risk maps.
-Answers: "Which parameters, if they change, break the plan?"
+Parametric perturbation analysis: find which parameters break the plan.
+
+### 5. Robust Optimization
+Scenario-based optimization under uncertainty: find plans that survive worst-case outcomes.
 
 All solvers use Google OR-Tools and are exposed as MCP tools for AI agent discovery.
 """
@@ -90,7 +86,7 @@ _total_solve_time = 0.0
 TRACKED_PATHS = (
     "/optimize_schedule", "/validate_schedule",
     "/optimize_routing", "/optimize_packing",
-    "/analyze_sensitivity",
+    "/analyze_sensitivity", "/optimize_robust",
 )
 
 
@@ -118,6 +114,7 @@ async def root():
             {"name": "optimize_routing", "description": "Solve a CVRPTW. Assign deliveries to vehicles optimally.", "endpoint": "/optimize_routing"},
             {"name": "optimize_packing", "description": "Solve a Bin Packing problem. Assign items to bins optimally.", "endpoint": "/optimize_packing"},
             {"name": "analyze_sensitivity", "description": "Parametric sensitivity analysis. Find which parameters break the plan.", "endpoint": "/analyze_sensitivity"},
+            {"name": "optimize_robust", "description": "Robust optimization under uncertainty. Find plans that survive worst-case scenarios.", "endpoint": "/optimize_robust"},
         ],
         "stats": {
             "requests_served": _request_count,
@@ -203,14 +200,35 @@ async def optimize_packing_endpoint(request: PackingRequest) -> PackingResponse:
     summary="Parametric Sensitivity Analysis",
     description=(
         "Perturbs parameters one at a time across any solver (scheduling, routing, packing), "
-        "re-solves, and produces a fragility map. Answers: 'Which parameters, if they change, "
-        "break the plan?' Returns sensitivity scores, elasticity, risk ranking, and critical flags. "
-        "Auto-detects parameters if none specified."
+        "re-solves, and produces a fragility map. Returns sensitivity scores, elasticity, "
+        "risk ranking, and critical flags. Auto-detects parameters if none specified."
     ),
     tags=["Sensitivity"],
 )
 async def analyze_sensitivity_endpoint(request: SensitivityRequest) -> SensitivityResponse:
     return run_sensitivity(request)
+
+
+# ─────────────────────────────────────────────
+# Robust Optimization
+# ─────────────────────────────────────────────
+
+@app.post(
+    "/optimize_robust",
+    response_model=RobustResponse,
+    operation_id="optimize_robust",
+    summary="Robust Optimization under Uncertainty",
+    description=(
+        "Scenario-based robust optimization. Specify uncertainty ranges for parameters, "
+        "and the engine generates scenarios, solves each, and recommends a solution that "
+        "protects against worst-case outcomes. Returns price of robustness, feasibility rate, "
+        "percentiles, and human-readable recommendations. "
+        "Modes: worst_case, percentile_90/95, regret_minimization."
+    ),
+    tags=["Robust"],
+)
+async def optimize_robust_endpoint(request: RobustRequest) -> RobustResponse:
+    return run_robust(request)
 
 
 # ─────────────────────────────────────────────
@@ -252,9 +270,10 @@ try:
         name="OptimEngine",
         description=(
             "Operations Intelligence Solver — Scheduling (FJSP), "
-            "Vehicle Routing (CVRPTW), Bin Packing, and Sensitivity Analysis. "
+            "Vehicle Routing (CVRPTW), Bin Packing, Sensitivity Analysis, "
+            "and Robust Optimization under Uncertainty. "
             "Assign tasks to machines, deliveries to vehicles, or items to bins optimally. "
-            "Analyze parameter sensitivity to find which inputs break the plan. "
+            "Analyze sensitivity and optimize under uncertainty. "
             "All solvers powered by Google OR-Tools."
         ),
         describe_all_responses=True,
