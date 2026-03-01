@@ -1,0 +1,29 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "OptimEngine",
+  "description": "Operations Intelligence Solver — 4 levels of optimization intelligence. L1: Scheduling (FJSP), Routing (CVRPTW), Bin Packing. L2: Sensitivity Analysis, Robust Optimization, Stochastic (Monte Carlo + CVaR). L2.5: Multi-objective Pareto Frontier. L3: Prescriptive Intelligence (Forecast + Optimize + Advise). 11 MCP tools, 121 tests. Powered by Google OR-Tools. Free beta.",
+  "image": "https://optim-engine-landing.vercel.app/favicon.ico",
+  "services": [
+    {
+      "name": "MCP",
+      "endpoint": "https://optim-engine-production.up.railway.app/mcp"
+    },
+    {
+      "name": "API",
+      "endpoint": "https://optim-engine-production.up.railway.app/"
+    },
+    {
+      "name": "web",
+      "endpoint": "https://optim-engine-landing.vercel.app/"
+    }
+  ],
+  "version": "8.0.0",
+  "capabilities": {
+    "level_1": "Deterministic Optimization (scheduling, routing, packing)",
+    "level_2": "Optimization under Uncertainty (sensitivity, robust, stochastic)",
+    "level_2_5": "Multi-objective Optimization (pareto frontier)",
+    "level_3": "Prescriptive Intelligence (forecast + optimize + advise)"
+  },
+  "source": "https://github.com/MicheleCampi/optim-engine",
+  "author": "Michele Campi"
+}
