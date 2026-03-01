@@ -184,7 +184,7 @@ AI Agent (Claude, GPT, Gemini, etc.)
 python -m pytest tests/ -v
 ```
 
-174 tests across 9 modules.
+121 tests across 9 modules.
 
 ---
 
