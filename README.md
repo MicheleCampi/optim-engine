@@ -7,7 +7,7 @@ Solves scheduling, routing, and packing — then quantifies risk, finds trade-of
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io)
 [![OR-Tools](https://img.shields.io/badge/Solver-OR--Tools-green)](https://developers.google.com/optimization)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-yellow)](https://python.org)
-[![Tests](https://img.shields.io/badge/Tests-174%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-121%20passed-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 ---
@@ -89,9 +89,9 @@ uvicorn api.server:app --host 0.0.0.0 --port 8000
 {
   "mcpServers": {
     "optim-engine": {
-      "command": "mcp-proxy",
+      "command": "supergateway",
       "args": [
-        "https://optim-engine-production.up.railway.app/mcp"
+        "--sse", "https://optim-engine-production.up.railway.app/mcp/sse"
       ]
     }
   }
@@ -198,6 +198,20 @@ python -m pytest tests/ -v
 - [Apify Store](https://apify.com/hearty_indentation/optim-engine)
 - [LobeHub](https://lobehub.com/mcp/michelecampi-optim-engine)
 - [mcp.so](https://mcp.so/server/optim-engine)
+
+---
+
+## On-Chain Identity (ERC-8004)
+
+OptimEngine is registered on-chain as **ERC-8004 Agent #22518** on Base L2.
+
+- **Registry:** `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
+- **Chain:** Base (8453)
+- **Agent ID:** 22518
+- **Standard:** [ERC-8004: Trustless Agents](https://eips.ethereum.org/EIPS/eip-8004)
+- **Explorer:** [8004scan.io](https://8004scan.io)
+
+Verifiable identity, reputation-ready, MCP endpoint registered on-chain.
 
 ---
 
