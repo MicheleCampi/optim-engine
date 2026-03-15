@@ -1,5 +1,5 @@
 """
-OptimEngine — FastAPI + MCP Server v8.0.0
+OptimEngine — FastAPI + MCP Server v9.0.0
 Operations Intelligence Solver: L1 + L2 + L2.5 + L3
 """
 
@@ -39,7 +39,7 @@ from prescriptive.engine import prescriptive_advise as run_prescriptive
 
 
 APP_NAME = "OptimEngine"
-APP_VERSION = "8.0.0"
+APP_VERSION = "9.0.0"
 APP_DESCRIPTION = """
 **Operations Intelligence Solver** — MCP-native optimization across 4 intelligence levels.
 
