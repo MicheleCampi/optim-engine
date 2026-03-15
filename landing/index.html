@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptimEngine v9 — Operations Intelligence for the Agentic Economy</title>
+<meta name="description" content="11-tool MCP Server for scheduling, routing, bin packing with sensitivity, robust, stochastic, Pareto & prescriptive intelligence. Built for AI agents.">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e1a;--bg2:#111827;--bg3:#1a2035;--fg:#e2e8f0;--fg2:#94a3b8;--accent:#0d9488;--accent2:#14b8a6;--blue:#3b82f6;--purple:#8b5cf6;--coral:#f97316;--red:#ef4444;--border:#1e293b;--card:#0f172a}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--fg);line-height:1.6;overflow-x:hidden}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.container{max-width:1100px;margin:0 auto;padding:0 24px}
+
+/* Hero */
+.hero{padding:100px 0 80px;text-align:center;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(13,148,136,.08) 0%,transparent 70%);pointer-events:none}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border:1px solid var(--border);border-radius:20px;font-size:13px;color:var(--fg2);margin-bottom:24px;letter-spacing:.3px}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+h1{font-size:clamp(36px,5vw,56px);font-weight:700;line-height:1.1;margin-bottom:16px;letter-spacing:-.02em}
+h1 span{background:linear-gradient(135deg,var(--accent2),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:18px;color:var(--fg2);max-width:640px;margin:0 auto 40px}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{padding:12px 28px;border-radius:8px;font-size:15px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);text-decoration:none}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--fg)}
+.btn-outline:hover{border-color:var(--accent);text-decoration:none}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:12px;overflow:hidden;margin:-20px 0 80px}
+.stat{background:var(--bg2);padding:28px 20px;text-align:center}
+.stat-num{font-size:28px;font-weight:700;color:var(--accent2)}
+.stat-label{font-size:13px;color:var(--fg2);margin-top:4px}
+
+/* Section */
+section{padding:80px 0}
+.section-label{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px;font-weight:500}
+h2{font-size:32px;font-weight:700;margin-bottom:12px;letter-spacing:-.01em}
+.section-desc{color:var(--fg2);font-size:16px;margin-bottom:40px;max-width:600px}
+
+/* Connect CTA */
+.connect{background:var(--bg3);border:1px solid var(--border);border-radius:16px;padding:40px;margin-bottom:80px}
+.connect h3{font-size:22px;font-weight:700;margin-bottom:8px}
+.connect p{color:var(--fg2);margin-bottom:20px}
+.url-box{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:14px;flex-wrap:wrap}
+.url-box code{flex:1;color:var(--accent2);min-width:200px}
+.url-box .copy-btn{padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}
+.step{text-align:center;padding:16px 12px}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-bottom:8px}
+.step-text{font-size:13px;color:var(--fg2)}
+
+/* v9 features */
+.features{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;position:relative;overflow:hidden;transition:border-color .2s}
+.feature:hover{border-color:var(--accent)}
+.feature-tag{display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.feature h3{font-size:17px;font-weight:700;margin-bottom:6px}
+.feature p{font-size:14px;color:var(--fg2);margin-bottom:12px}
+.feature code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent2);background:var(--bg);padding:8px 12px;border-radius:6px;display:block;white-space:pre;overflow-x:auto;line-height:1.5}
+.tag-speed{background:rgba(59,130,246,.15);color:var(--blue)}
+.tag-shift{background:rgba(139,92,246,.15);color:var(--purple)}
+.tag-quality{background:rgba(239,68,68,.15);color:var(--red)}
+.tag-setup{background:rgba(249,115,22,.15);color:var(--coral)}
+
+/* Intelligence levels */
+.levels{display:grid;gap:16px}
+.level{display:grid;grid-template-columns:140px 1fr;gap:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;transition:border-color .2s}
+.level:hover{border-color:var(--accent)}
+.level-badge{font-size:14px;font-weight:700;padding:6px 14px;border-radius:6px;text-align:center;align-self:start}
+.l1{background:rgba(13,148,136,.15);color:var(--accent2)}
+.l2{background:rgba(59,130,246,.15);color:var(--blue)}
+.l25{background:rgba(139,92,246,.15);color:var(--purple)}
+.l3{background:rgba(249,115,22,.15);color:var(--coral)}
+.level h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.level p{font-size:14px;color:var(--fg2)}
+.level .tools{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.tool-tag{font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 8px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--fg2)}
+
+/* Demo results */
+.demo{background:var(--bg3);border:1px solid var(--border);border-radius:16px;padding:40px;margin-top:40px}
+.demo h3{font-size:20px;font-weight:700;margin-bottom:4px}
+.demo .subtitle{color:var(--fg2);font-size:14px;margin-bottom:24px}
+.demo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.demo-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.demo-card .tool-name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);margin-bottom:6px}
+.demo-card .result{font-size:14px;color:var(--fg)}
+.demo-card .metric{font-size:22px;font-weight:700;color:var(--accent2);margin:4px 0}
+
+/* Architecture */
+.arch-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:var(--fg2);overflow-x:auto;white-space:pre}
+
+/* Platforms */
+.platforms{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
+.platform{padding:10px 20px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:14px;transition:border-color .2s}
+.platform:hover{border-color:var(--accent)}
+
+/* Footer */
+footer{padding:48px 0;border-top:1px solid var(--border);text-align:center;color:var(--fg2);font-size:13px}
+footer a{color:var(--accent2)}
+
+@media(max-width:768px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .features{grid-template-columns:1fr}
+  .level{grid-template-columns:1fr}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .demo-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="badge"><span class="dot"></span>v9.0.0 — Live on Railway</div>
+    <h1><span>Operations Intelligence</span><br>for the Agentic Economy</h1>
+    <p>11 MCP tools. 4 intelligence levels. From optimal schedule to risk-adjusted recommendation — in one conversation with Claude.</p>
+    <div class="cta-row">
+      <a href="#connect" class="btn btn-primary">Connect to Claude</a>
+      <a href="https://github.com/MicheleCampi/optim-engine" class="btn btn-outline">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="container">
+  <div class="stats">
+    <div class="stat"><div class="stat-num">11</div><div class="stat-label">MCP Tools</div></div>
+    <div class="stat"><div class="stat-num">4</div><div class="stat-label">Intelligence Levels</div></div>
+    <div class="stat"><div class="stat-num">121</div><div class="stat-label">Tests Passed</div></div>
+    <div class="stat"><div class="stat-num">$0</div><div class="stat-label">Capital Required</div></div>
+  </div>
+</div>
+
+<!-- Connect CTA -->
+<div class="container" id="connect">
+  <div class="connect">
+    <h3>Connect to Claude in 60 seconds</h3>
+    <p>Add OptimEngine as a Remote MCP connector in Claude Settings → Integrations</p>
+    <div class="url-box">
+      <code id="mcp-url">https://optim-engine-production.up.railway.app/mcp</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('mcp-url').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Open Claude Settings</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Go to Integrations</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Add MCP connector</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-text">Paste URL above</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- v9 Features -->
+<section>
+  <div class="container">
+    <div class="section-label">What's new</div>
+    <h2>v9.0.0 — Four brain upgrades</h2>
+    <p class="section-desc">Closing the gap between academic FJSP and how real workshops operate. Backward compatible, zero regressions.</p>
+    <div class="features">
+      <div class="feature">
+        <span class="feature-tag tag-speed">Speed</span>
+        <h3>Duration per machine</h3>
+        <p>Same task, different times on different machines. The solver picks the fastest eligible.</p>
+        <code>duration_per_machine: {"CNC-1": 120, "CNC-2": 80}</code>
+      </div>
+      <div class="feature">
+        <span class="feature-tag tag-shift">Shifts</span>
+        <h3>Availability windows</h3>
+        <p>Multiple shifts, maintenance breaks, turni differenziati per macchina.</p>
+        <code>availability_windows: [{start:0, end:480}, {start:510, end:960}]</code>
+      </div>
+      <div class="feature">
+        <span class="feature-tag tag-quality">Quality</span>
+        <h3>Quality gates</h3>
+        <p>Jobs require minimum yield. Machines have quality rates. Below threshold = excluded.</p>
+        <code>quality_min: 0.97  ←→  yield_rate: 0.99</code>
+      </div>
+      <div class="feature">
+        <span class="feature-tag tag-setup">Setup</span>
+        <h3>Setup times matrix</h3>
+        <p>Sequence-dependent changeover. Switching product families costs time.</p>
+        <code>setup_times: [{machine:"M1", from:"J1", to:"J2", time:15}]</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Intelligence Levels -->
+<section>
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <h2>4 intelligence levels, 11 tools</h2>
+    <p class="section-desc">LLMs understand optimization requests but cannot compute optimal solutions or quantify risk. OptimEngine does both.</p>
+    <div class="levels">
+      <div class="level">
+        <div><span class="level-badge l1">L1 Deterministic</span></div>
+        <div>
+          <h3>Optimal assignments under known constraints</h3>
+          <p>Scheduling (FJSP), routing (CVRPTW), bin packing — each with 4 objectives.</p>
+          <div class="tools">
+            <span class="tool-tag">optimize_schedule</span>
+            <span class="tool-tag">validate_schedule</span>
+            <span class="tool-tag">optimize_routing</span>
+            <span class="tool-tag">optimize_packing</span>
+          </div>
+        </div>
+      </div>
+      <div class="level">
+        <div><span class="level-badge l2">L2 Uncertainty</span></div>
+        <div>
+          <h3>What happens when parameters change?</h3>
+          <p>Sensitivity maps, worst-case protection, Monte Carlo with VaR/CVaR risk metrics.</p>
+          <div class="tools">
+            <span class="tool-tag">analyze_sensitivity</span>
+            <span class="tool-tag">optimize_robust</span>
+            <span class="tool-tag">optimize_stochastic</span>
+          </div>
+        </div>
+      </div>
+      <div class="level">
+        <div><span class="level-badge l25">L2.5 Multi-obj</span></div>
+        <div>
+          <h3>Trade-off frontiers for competing goals</h3>
+          <p>Pareto frontier for 2-4 objectives. Correlation analysis and recommendations.</p>
+          <div class="tools"><span class="tool-tag">optimize_pareto</span></div>
+        </div>
+      </div>
+      <div class="level">
+        <div><span class="level-badge l3">L3 Prescriptive</span></div>
+        <div>
+          <h3>Forecast → Optimize → Risk → Recommend</h3>
+          <p>Historical data in, actionable decisions out. 4 forecasting methods, 3 risk appetites.</p>
+          <div class="tools"><span class="tool-tag">prescriptive_advise</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo results -->
+    <div class="demo">
+      <h3>Live demo: MetalPrecision S.r.l.</h3>
+      <div class="subtitle">4 CNC centers (2015-2023) · 5 automotive clients (Bosch, Ducati, Maserati, Comer Industries, Dallara) · 15 tasks</div>
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="tool-name">optimize_schedule</div>
+          <div class="metric">225 min</div>
+          <div class="result">Optimal makespan · 5/5 on time · 83.3% utilization · 0.04s</div>
+        </div>
+        <div class="demo-card">
+          <div class="tool-name">analyze_sensitivity</div>
+          <div class="metric">73 solves</div>
+          <div class="result">12 parameters in 3.6s · Ducati sgrossatura most sensitive (8.9)</div>
+        </div>
+        <div class="demo-card">
+          <div class="tool-name">optimize_robust</div>
+          <div class="metric">7.7% premium</div>
+          <div class="result">Worst-case 210 min · 100% feasible · 15 scenarios · 0.3s</div>
+        </div>
+        <div class="demo-card">
+          <div class="tool-name">optimize_stochastic</div>
+          <div class="metric">CVaR95 = 189</div>
+          <div class="result">30 Monte Carlo · Expected 172 · CV 4.7% · Risk premium 9.8%</div>
+        </div>
+        <div class="demo-card">
+          <div class="tool-name">optimize_pareto</div>
+          <div class="metric">-1.0 correlation</div>
+          <div class="result">Makespan vs tardiness: 195/15 or 220/0 · Pure conflict</div>
+        </div>
+        <div class="demo-card">
+          <div class="tool-name">prescriptive_advise</div>
+          <div class="metric">175 min rec.</div>
+          <div class="result">Forecast 95 min (+1.3%/period) · Range 167-183 · Risk: LOW</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section>
+  <div class="container">
+    <div class="section-label">Under the hood</div>
+    <h2>Stack</h2>
+    <p class="section-desc">Python 3.12 · OR-Tools CP-SAT · FastMCP · Pydantic · Railway</p>
+    <div class="arch-box">┌─────────────────────────────────────────────────────┐
+│                   FastMCP Server                     │
+│              (SSE + Streamable HTTP)                 │
+├─────────────────────────────────────────────────────┤
+│  L1 Solvers          │  L2+ Intelligence            │
+│  ┌─────────────────┐ │  ┌────────────────────────┐  │
+│  │ Scheduling (v9) │ │  │ Sensitivity Analysis   │  │
+│  │ Routing         │ │  │ Robust Optimization    │  │
+│  │ Bin Packing     │ │  │ Stochastic (MC+CVaR)   │  │
+│  │ Validator       │ │  │ Pareto Multi-objective  │  │
+│  └─────────────────┘ │  │ Prescriptive (L3)      │  │
+│                       │  └────────────────────────┘  │
+├─────────────────────────────────────────────────────┤
+│  OR-Tools CP-SAT  │  Pydantic v2  │  Python 3.12    │
+└─────────────────────────────────────────────────────┘</div>
+  </div>
+</section>
+
+<!-- Available On -->
+<section>
+  <div class="container">
+    <div class="section-label">Distribution</div>
+    <h2>Available on 8+ platforms</h2>
+    <div class="platforms">
+      <a href="https://optim-engine-production.up.railway.app" class="platform">Railway (live)</a>
+      <a href="https://github.com/MicheleCampi/optim-engine" class="platform">GitHub</a>
+      <span class="platform">claude.ai (Remote MCP)</span>
+      <span class="platform">MCPize</span>
+      <span class="platform">Apify</span>
+      <span class="platform">LobeHub</span>
+      <span class="platform">mcp.so</span>
+      <span class="platform">ERC-8004 #22518</span>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>OptimEngine v9.0.0 · Built by <a href="https://github.com/MicheleCampi">Michele Campi</a> · ERC-8004 Agent #22518 on Base L2</p>
+    <p style="margin-top:8px">Operations Intelligence for European SME Manufacturing · Bologna-Parma-Fidenza</p>
+  </div>
+</footer>
+
+</body>
+</html>
