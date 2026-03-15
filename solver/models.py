@@ -47,6 +47,13 @@ class TimeWindow(BaseModel):
     latest_end: Optional[int] = Field(None, ge=0, description="Latest end time (in time units). None = no deadline.")
 
 
+
+class AvailabilityWindow(BaseModel):
+    """A time window during which a machine is available (e.g., a shift, post-maintenance)."""
+    start: int = Field(..., ge=0, description="Start of availability window")
+    end: int = Field(..., ge=0, description="End of availability window")
+
+
 class Task(BaseModel):
     """A single task (operation) within a job."""
     task_id: str = Field(..., description="Unique task identifier within this job")
@@ -55,7 +62,11 @@ class Task(BaseModel):
         ..., min_length=1,
         description="Machine IDs that can process this task. For flexible scheduling, list multiple."
     )
-    setup_time: int = Field(0, ge=0, description="Setup time before this task starts on any machine")
+    duration_per_machine: Optional[dict[str, int]] = Field(
+        None,
+        description="Per-machine processing times. Overrides 'duration' for listed machines. E.g. {'CNC-1': 120, 'CNC-2': 90}"
+    )
+    setup_time: int = Field(0, ge=0, description="Setup time before this task starts on any machine (DEPRECATED: prefer setup_times on ScheduleRequest)")
 
     @field_validator("eligible_machines")
     @classmethod
@@ -71,6 +82,10 @@ class Job(BaseModel):
     priority: int = Field(1, ge=1, le=10, description="Priority (1=lowest, 10=highest)")
     due_date: Optional[int] = Field(None, ge=0, description="Due date in time units. Used for tardiness objectives.")
     time_window: Optional[TimeWindow] = Field(None, description="Global time window for this job")
+    quality_min: Optional[float] = Field(
+        None, ge=0.0, le=1.0,
+        description="Minimum yield/quality rate required (0.0-1.0). Only machines with yield_rate >= this are eligible."
+    )
 
 
 class Machine(BaseModel):
@@ -79,7 +94,24 @@ class Machine(BaseModel):
     name: Optional[str] = Field(None, description="Human-readable machine name")
     availability_start: int = Field(0, ge=0, description="When the machine becomes available")
     availability_end: Optional[int] = Field(None, ge=0, description="When the machine stops being available. None = always available.")
+    availability_windows: Optional[list[AvailabilityWindow]] = Field(
+        None,
+        description="Multiple availability windows (shifts/breaks). Overrides availability_start/end when provided."
+    )
+    yield_rate: float = Field(
+        1.0, ge=0.0, le=1.0,
+        description="Machine quality/yield rate (0.0-1.0). 1.0 = perfect yield. Used with Job.quality_min."
+    )
 
+
+
+
+class SetupTimeEntry(BaseModel):
+    """Sequence-dependent setup time: switching from one job to another on a specific machine."""
+    machine_id: str = Field(..., description="Machine where the setup applies")
+    from_job_id: str = Field(..., description="Preceding job (or '*' for any)")
+    to_job_id: str = Field(..., description="Following job (or '*' for any)")
+    setup_time: int = Field(..., ge=0, description="Setup time in time units")
 
 class ScheduleRequest(BaseModel):
     """
@@ -98,6 +130,10 @@ class ScheduleRequest(BaseModel):
     max_solve_time_seconds: int = Field(
         30, ge=1, le=300,
         description="Maximum solver runtime in seconds"
+    )
+    setup_times: Optional[list[SetupTimeEntry]] = Field(
+        None,
+        description="Sequence-dependent setup times. Overrides Task.setup_time for matching transitions."
     )
     
     @field_validator("jobs")

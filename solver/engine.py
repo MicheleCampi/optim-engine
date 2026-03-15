@@ -21,12 +21,53 @@ from ortools.sat.python import cp_model
 from .models import (
     ScheduleRequest, ScheduleResponse, ScheduledTask,
     JobSummary, MachineUtilization, ScheduleMetrics, GanttEntry,
-    SolverStatus, ObjectiveType,
+    SolverStatus, ObjectiveType, SetupTimeEntry,
 )
 
 
 # Named tuples for internal bookkeeping
 _TaskVar = collections.namedtuple("_TaskVar", "start end interval duration machine_id job_id task_id")
+
+
+def _get_effective_duration(task, machine_id: str) -> int:
+    """Get task duration for a specific machine, considering duration_per_machine."""
+    if task.duration_per_machine and machine_id in task.duration_per_machine:
+        return task.duration_per_machine[machine_id]
+    return task.duration
+
+
+def _filter_machines_by_quality(job, machines_map: dict) -> list[str]:
+    """Filter eligible machines based on job quality_min and machine yield_rate."""
+    if job.quality_min is None:
+        return None  # No filtering needed
+    return [
+        mid for mid, m in machines_map.items()
+        if m.yield_rate >= job.quality_min
+    ]
+
+
+def _build_setup_matrix(request) -> dict:
+    """Build lookup: (machine_id, from_job_id, to_job_id) -> setup_time."""
+    matrix = {}
+    if not request.setup_times:
+        return matrix
+    for entry in request.setup_times:
+        matrix[(entry.machine_id, entry.from_job_id, entry.to_job_id)] = entry.setup_time
+        # Wildcard expansion would be done at constraint-building time
+    return matrix
+
+
+def _get_setup_time(matrix: dict, machine_id: str, from_job: str, to_job: str) -> int:
+    """Lookup setup time with wildcard fallback: exact → from=* → to=* → *,* → 0."""
+    if (machine_id, from_job, to_job) in matrix:
+        return matrix[(machine_id, from_job, to_job)]
+    if (machine_id, "*", to_job) in matrix:
+        return matrix[(machine_id, "*", to_job)]
+    if (machine_id, from_job, "*") in matrix:
+        return matrix[(machine_id, from_job, "*")]
+    if (machine_id, "*", "*") in matrix:
+        return matrix[(machine_id, "*", "*")]
+    return 0
 
 
 def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
@@ -58,11 +99,45 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
                             message=f"Task {job.job_id}/{task.task_id} references unknown machine '{mid}'"
                         )
         
-        # ── Compute horizon ──
+        # ── v9: Quality-based machine filtering ──
+        quality_eligible: dict[str, list[str]] = {}  # job_id -> list of quality-ok machine_ids
+        for job in request.jobs:
+            if job.quality_min is not None:
+                ok_machines = _filter_machines_by_quality(job, machine_map)
+                if not ok_machines:
+                    return ScheduleResponse(
+                        status=SolverStatus.INFEASIBLE,
+                        message=f"Job '{job.job_id}' requires quality_min={job.quality_min} but no machine meets this threshold."
+                    )
+                quality_eligible[job.job_id] = ok_machines
+        
+        # ── v9: Build setup time matrix ──
+        setup_matrix = _build_setup_matrix(request)
+        
+        # ── v9: Build availability windows lookup ──
+        # Convert availability_windows to list of (start, end) tuples per machine
+        machine_windows: dict[str, list[tuple[int, int]]] = {}
+        for m in request.machines:
+            if m.availability_windows:
+                machine_windows[m.machine_id] = [(w.start, w.end) for w in m.availability_windows]
+        
+        # ── Compute horizon (v9: accounts for duration_per_machine + setup_times + availability_windows) ──
         horizon = sum(
-            t.duration + t.setup_time
+            max(
+                [t.duration] + 
+                (list(t.duration_per_machine.values()) if t.duration_per_machine else [])
+            ) + t.setup_time
             for j in request.jobs for t in j.tasks
         )
+        # Add extra buffer for sequence-dependent setup times
+        if setup_matrix:
+            max_setup = max(setup_matrix.values()) if setup_matrix else 0
+            horizon += max_setup * sum(len(j.tasks) for j in request.jobs)
+        # v9: Extend horizon to cover availability windows
+        for m in request.machines:
+            if m.availability_windows:
+                for w in m.availability_windows:
+                    horizon = max(horizon, w.end)
         # Add machine availability offsets
         for m in request.machines:
             if m.availability_end is not None:
@@ -86,8 +161,22 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
         machine_intervals: dict[str, list] = {m.machine_id: [] for m in request.machines}
         
         for job in request.jobs:
+            # v9: Filter eligible machines by quality requirement
+            job_quality_machines = set(quality_eligible.get(job.job_id, []))
+            
             for task in job.tasks:
                 jid, tid = job.job_id, task.task_id
+                
+                # v9: Determine effective eligible machines after quality filtering
+                effective_machines = list(task.eligible_machines)
+                if job_quality_machines:
+                    effective_machines = [m for m in effective_machines if m in job_quality_machines]
+                    if not effective_machines:
+                        return ScheduleResponse(
+                            status=SolverStatus.INFEASIBLE,
+                            message=f"Task {jid}/{tid}: no eligible machine meets quality_min={job.quality_min}"
+                        )
+                
                 total_duration = task.duration + task.setup_time
                 
                 # Global start/end for this task (across alternatives)
@@ -97,40 +186,54 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
                 task_starts[(jid, tid)] = t_start
                 task_ends[(jid, tid)] = t_end
                 
-                if len(task.eligible_machines) == 1:
+                if len(effective_machines) == 1:
                     # ── Single machine: no alternatives needed ──
-                    mid = task.eligible_machines[0]
+                    mid = effective_machines[0]
+                    # v9: per-machine duration
+                    eff_duration = _get_effective_duration(task, mid) + task.setup_time
                     interval = model.new_interval_var(
-                        t_start, total_duration, t_end, f"interval{suffix}_{mid}"
+                        t_start, eff_duration, t_end, f"interval{suffix}_{mid}"
                     )
                     all_task_vars[(jid, tid, mid)] = _TaskVar(
                         start=t_start, end=t_end, interval=interval,
-                        duration=total_duration, machine_id=mid,
+                        duration=eff_duration, machine_id=mid,
                         job_id=jid, task_id=tid
                     )
                     machine_intervals[mid].append(interval)
                     
-                    # Apply machine availability
+                    # Apply machine availability (v9: windows or legacy start/end)
                     m = machine_map[mid]
-                    if m.availability_start > 0:
-                        model.add(t_start >= m.availability_start)
-                    if m.availability_end is not None:
-                        model.add(t_end <= m.availability_end)
+                    if mid in machine_windows:
+                        # v9: Multiple availability windows — task must fit within at least one
+                        window_bools = []
+                        for wi, (ws, we) in enumerate(machine_windows[mid]):
+                            wb = model.new_bool_var(f"win_{jid}_{tid}_{mid}_{wi}")
+                            model.add(t_start >= ws).only_enforce_if(wb)
+                            model.add(t_end <= we).only_enforce_if(wb)
+                            window_bools.append(wb)
+                        model.add_exactly_one(window_bools)
+                    else:
+                        if m.availability_start > 0:
+                            model.add(t_start >= m.availability_start)
+                        if m.availability_end is not None:
+                            model.add(t_end <= m.availability_end)
                 else:
                     # ── Multiple eligible machines: optional intervals ──
                     alt_presences = []
-                    for mid in task.eligible_machines:
+                    for mid in effective_machines:
                         alt_suffix = f"{suffix}_{mid}"
                         presence = model.new_bool_var(f"pres{alt_suffix}")
                         alt_start = model.new_int_var(0, horizon, f"astart{alt_suffix}")
                         alt_end = model.new_int_var(0, horizon, f"aend{alt_suffix}")
+                        # v9: per-machine duration
+                        eff_dur = _get_effective_duration(task, mid) + task.setup_time
                         alt_interval = model.new_optional_interval_var(
-                            alt_start, total_duration, alt_end, presence, f"aint{alt_suffix}"
+                            alt_start, eff_dur, alt_end, presence, f"aint{alt_suffix}"
                         )
                         
                         all_task_vars[(jid, tid, mid)] = _TaskVar(
                             start=alt_start, end=alt_end, interval=alt_interval,
-                            duration=total_duration, machine_id=mid,
+                            duration=eff_dur, machine_id=mid,
                             job_id=jid, task_id=tid
                         )
                         presence_literals[(jid, tid, mid)] = presence
@@ -141,12 +244,25 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
                         model.add(alt_start == t_start).only_enforce_if(presence)
                         model.add(alt_end == t_end).only_enforce_if(presence)
                         
-                        # Machine availability
+                        # Machine availability (v9: windows or legacy)
                         m = machine_map[mid]
-                        if m.availability_start > 0:
-                            model.add(alt_start >= m.availability_start).only_enforce_if(presence)
-                        if m.availability_end is not None:
-                            model.add(alt_end <= m.availability_end).only_enforce_if(presence)
+                        if mid in machine_windows:
+                            # v9: Multiple availability windows
+                            window_bools = []
+                            for wi, (ws, we) in enumerate(machine_windows[mid]):
+                                wb = model.new_bool_var(f"win_{jid}_{tid}_{mid}_{wi}")
+                                model.add(alt_start >= ws).only_enforce_if([presence, wb])
+                                model.add(alt_end <= we).only_enforce_if([presence, wb])
+                                window_bools.append(wb)
+                            # If this machine is chosen, exactly one window must hold
+                            # If not chosen, windows are unconstrained
+                            model.add(sum(window_bools) == 1).only_enforce_if(presence)
+                            model.add(sum(window_bools) == 0).only_enforce_if(presence.negated())
+                        else:
+                            if m.availability_start > 0:
+                                model.add(alt_start >= m.availability_start).only_enforce_if(presence)
+                            if m.availability_end is not None:
+                                model.add(alt_end <= m.availability_end).only_enforce_if(presence)
                     
                     # Exactly one machine must be chosen
                     model.add_exactly_one(alt_presences)
@@ -165,6 +281,50 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
         for mid, intervals in machine_intervals.items():
             if len(intervals) > 1:
                 model.add_no_overlap(intervals)
+        
+        # ── v9: Sequence-dependent setup times ──
+        if setup_matrix:
+            # For each machine, for each ORDERED pair of tasks from different jobs:
+            # create a disjunction: either t1 before t2 (with setup12) or t2 before t1 (with setup21)
+            # We iterate i < j to avoid duplicates, creating one bool per pair.
+            for mid in machine_ids:
+                tasks_on_machine = [
+                    (jid, tid, tv) for (jid, tid, m), tv in all_task_vars.items() if m == mid
+                ]
+                for i in range(len(tasks_on_machine)):
+                    for j in range(i + 1, len(tasks_on_machine)):
+                        jid1, tid1, tv1 = tasks_on_machine[i]
+                        jid2, tid2, tv2 = tasks_on_machine[j]
+                        if jid1 == jid2:
+                            continue  # same job → handled by precedence
+                        
+                        st_12 = _get_setup_time(setup_matrix, mid, jid1, jid2)
+                        st_21 = _get_setup_time(setup_matrix, mid, jid2, jid1)
+                        
+                        if st_12 == 0 and st_21 == 0:
+                            continue  # no-overlap already handles ordering
+                        
+                        # Get presence literals (None for single-machine tasks = always present)
+                        pres1 = presence_literals.get((jid1, tid1, mid))
+                        pres2 = presence_literals.get((jid2, tid2, mid))
+                        
+                        # b=True → t1 before t2; b=False → t2 before t1
+                        b = model.new_bool_var(f"order_{mid}_{jid1}_{tid1}_{jid2}_{tid2}")
+                        
+                        # Conditions for when both tasks are on this machine
+                        cond_fwd = [b]
+                        cond_bwd = [b.negated()]
+                        if pres1 is not None:
+                            cond_fwd.append(pres1)
+                            cond_bwd.append(pres1)
+                        if pres2 is not None:
+                            cond_fwd.append(pres2)
+                            cond_bwd.append(pres2)
+                        
+                        if st_12 > 0:
+                            model.add(tv2.start >= tv1.end + st_12).only_enforce_if(cond_fwd)
+                        if st_21 > 0:
+                            model.add(tv1.start >= tv2.end + st_21).only_enforce_if(cond_bwd)
         
         # ── Job time window constraints ──
         for job in request.jobs:
@@ -260,22 +420,30 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
             gantt_entries = []
             
             for job in request.jobs:
+                # v9: rebuild effective machines for extraction (same logic as variable creation)
+                job_qm = set(quality_eligible.get(job.job_id, []))
+                
                 for task in job.tasks:
                     jid, tid = job.job_id, task.task_id
+                    
+                    # v9: effective eligible machines (quality-filtered)
+                    ext_machines = list(task.eligible_machines)
+                    if job_qm:
+                        ext_machines = [m for m in ext_machines if m in job_qm]
                     
                     # Determine which machine was chosen
                     chosen_mid = None
                     chosen_start = None
                     chosen_end = None
                     
-                    if len(task.eligible_machines) == 1:
-                        mid = task.eligible_machines[0]
+                    if len(ext_machines) == 1:
+                        mid = ext_machines[0]
                         tv = all_task_vars[(jid, tid, mid)]
                         chosen_mid = mid
                         chosen_start = solver.value(tv.start)
                         chosen_end = solver.value(tv.end)
                     else:
-                        for mid in task.eligible_machines:
+                        for mid in ext_machines:
                             pres = presence_literals.get((jid, tid, mid))
                             if pres is not None and solver.value(pres):
                                 tv = all_task_vars[(jid, tid, mid)]
@@ -285,10 +453,12 @@ def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
                                 break
                     
                     if chosen_mid is not None:
+                        # v9: effective duration considers per-machine duration
+                        eff_d = _get_effective_duration(task, chosen_mid) + task.setup_time
                         st = ScheduledTask(
                             job_id=jid, task_id=tid, machine_id=chosen_mid,
                             start=chosen_start, end=chosen_end,
-                            duration=task.duration + task.setup_time
+                            duration=eff_d
                         )
                         scheduled_tasks.append(st)
                         

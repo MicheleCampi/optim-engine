@@ -1,0 +1,12 @@
+{
+    "actorSpecification": 1,
+    "name": "optim-engine",
+    "title": "OptimEngine - Operations Scheduling Solver",
+    "description": "Solves Flexible Job Shop Scheduling Problems using Google OR-Tools CP-SAT solver. Assign tasks to machines optimally with support for precedence, time windows, machine eligibility, setup times, and multiple objectives. Designed for AI agents via MCP.",
+    "version": "2.0",
+    "dockerfile": "./Dockerfile",
+    "readme": "../README.md",
+    "categories": ["AI"],
+    "seoTitle": "Operations Scheduling Solver MCP Server",
+    "seoDescription": "AI-powered scheduling optimization for manufacturing and operations. Flexible Job Shop Scheduling with OR-Tools CP-SAT. MCP-native for AI agents."
+}
