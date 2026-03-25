@@ -73,6 +73,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+# ── API Key Protection ──
+ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY", "")
+
+@app.middleware("http")
+async def check_engine_key(request: Request, call_next):
+    # Public paths - no key required
+    public_paths = ("/", "/health", "/docs", "/openapi.json", "/redoc", "/favicon.ico")
+    if request.url.path in public_paths or request.url.path.startswith("/mcp"):
+        return await call_next(request)
+    # If ENGINE_API_KEY is set, require it on all solver paths
+    if ENGINE_API_KEY:
+        provided_key = request.headers.get("X-Engine-Key", "")
+        if provided_key != ENGINE_API_KEY:
+            return JSONResponse(status_code=403, content={"error": "Forbidden", "message": "Invalid or missing X-Engine-Key"})
+    return await call_next(request)
+
 _request_count = 0
 _total_solve_time = 0.0
 TRACKED_PATHS = ("/optimize_schedule", "/validate_schedule", "/optimize_routing", "/optimize_packing",
