@@ -5,6 +5,8 @@ Operations Intelligence Solver: L1 + L2 + L2.5 + L3
 
 import os
 import time
+from collections import defaultdict, deque
+from threading import Lock
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -87,6 +89,57 @@ async def check_engine_key(request: Request, call_next):
         provided_key = request.headers.get("X-Engine-Key", "")
         if provided_key != ENGINE_API_KEY:
             return JSONResponse(status_code=403, content={"error": "Forbidden", "message": "Invalid or missing X-Engine-Key"})
+    return await call_next(request)
+
+# ─── Rate Limiting MCP (Free Tier) ───
+# Protects the open MCP endpoint from abuse while keeping it free for demos.
+# Paid production access goes through the x402 gateways (18 endpoints on Base,
+# registered on x402scan). This middleware only affects /mcp/messages (tool calls),
+# not the SSE handshake at /mcp itself.
+MCP_RATE_LIMIT = 10  # requests per hour per IP
+MCP_WINDOW_SECONDS = 3600
+_mcp_hits: dict = defaultdict(deque)
+_mcp_hits_lock = Lock()
+
+@app.middleware("http")
+async def mcp_rate_limit(request: Request, call_next):
+    # Only rate-limit MCP tool calls (not the SSE handshake on /mcp itself)
+    if not request.url.path.startswith("/mcp/messages"):
+        return await call_next(request)
+
+    # Get real client IP (Railway reverse proxy uses X-Forwarded-For)
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+
+    now = time.time()
+    with _mcp_hits_lock:
+        hits = _mcp_hits[client_ip]
+        # Clean old hits outside the rolling window
+        while hits and hits[0] < now - MCP_WINDOW_SECONDS:
+            hits.popleft()
+        if len(hits) >= MCP_RATE_LIMIT:
+            retry_after = int(hits[0] + MCP_WINDOW_SECONDS - now)
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "message": (
+                        f"Free MCP tier: {MCP_RATE_LIMIT} tool calls per hour per IP. "
+                        "For production use, visit https://www.x402scan.com and search "
+                        "'OptimEngine' to find all 18 paid endpoints (USDC on Base, from $0.05)."
+                    ),
+                    "retry_after_seconds": retry_after,
+                    "free_tier_limit": MCP_RATE_LIMIT,
+                    "window": "1 hour",
+                    "paid_tier": "https://www.x402scan.com",
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
+        hits.append(now)
+
     return await call_next(request)
 
 _request_count = 0
