@@ -107,7 +107,7 @@ ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY", "")
 async def check_engine_key(request: Request, call_next):
     # Public paths - no key required
     public_paths = ("/", "/health", "/docs", "/openapi.json", "/redoc", "/favicon.ico")
-    if request.url.path in public_paths or request.url.path.startswith("/mcp"):
+    if request.url.path in public_paths or request.url.path.startswith("/mcp") or request.url.path.startswith("/.well-known"):
         return await call_next(request)
     # If ENGINE_API_KEY is set, require it on all solver paths
     if ENGINE_API_KEY:
@@ -316,7 +316,7 @@ try:
             "L3: Prescriptive Intelligence (Forecast + Optimize + Advise). "
             "All powered by Google OR-Tools."
         ), describe_all_responses=True, describe_full_response_schema=True)
-    mcp.mount_sse()
+    mcp.mount_sse(mount_path="/mcp")
     print("✅ MCP server mounted at /mcp (SSE, open — free tier)")
 
     # ── MCP v2: Streamable HTTP + OAuth 2.1 ──
