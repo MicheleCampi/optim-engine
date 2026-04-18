@@ -39,6 +39,31 @@ from pareto.engine import optimize_pareto as run_pareto
 from prescriptive.models import PrescriptiveRequest, PrescriptiveResponse
 from prescriptive.engine import prescriptive_advise as run_prescriptive
 
+# ─── ScaleKit OAuth via PyJWT (MCP v2 auth) ───
+# Uses PyJWT + cryptography to validate ScaleKit-issued JWTs directly,
+# avoiding the scalekit-sdk-python package which conflicts with OR-Tools protobuf.
+import jwt as pyjwt
+import urllib.request
+import json as _json
+
+_SCALEKIT_ENV_URL = os.environ.get("SCALEKIT_ENVIRONMENT_URL", "")
+_SCALEKIT_RESOURCE_ID = os.environ.get("SCALEKIT_RESOURCE_ID", "")
+_SCALEKIT_READY = bool(_SCALEKIT_ENV_URL and _SCALEKIT_RESOURCE_ID)
+_jwks_client = None
+
+if _SCALEKIT_READY:
+    try:
+        _jwks_client = pyjwt.PyJWKClient(
+            f"{_SCALEKIT_ENV_URL}/.well-known/jwks.json",
+            cache_keys=True,
+            lifespan=3600,
+        )
+        print(f"\u2705 ScaleKit JWKS client initialized for {_SCALEKIT_ENV_URL}")
+    except Exception as e:
+        print(f"\u26a0\ufe0f  ScaleKit JWKS init failed: {e}")
+        _SCALEKIT_READY = False
+        _jwks_client = None
+
 
 APP_NAME = "OptimEngine"
 APP_VERSION = "9.0.0"
@@ -104,7 +129,7 @@ _mcp_hits_lock = Lock()
 @app.middleware("http")
 async def mcp_rate_limit(request: Request, call_next):
     # Only rate-limit MCP tool calls (not the SSE handshake on /mcp itself)
-    if not request.url.path.startswith("/mcp/messages"):
+    if not (request.url.path.startswith("/mcp/messages") or request.url.path.startswith("/mcp/v2")):
         return await call_next(request)
 
     # Get real client IP (Railway reverse proxy uses X-Forwarded-For)
@@ -186,6 +211,23 @@ async def root():
 @app.get("/health", operation_id="health_check", summary="Health check")
 async def health():
     return {"status": "healthy", "version": APP_VERSION}
+
+# ─── OAuth Protected Resource Discovery (MCP v2) ───
+@app.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource():
+    """MCP clients call this to discover the OAuth 2.1 authorization server."""
+    base_url = os.environ.get("BASE_URL", "https://optim-engine-production.up.railway.app")
+    if not _SCALEKIT_ENV_URL or not _SCALEKIT_RESOURCE_ID:
+        return JSONResponse(status_code=503, content={"error": "OAuth not configured"})
+    return {
+        "authorization_servers": [
+            f"{_SCALEKIT_ENV_URL}/resources/{_SCALEKIT_RESOURCE_ID}"
+        ],
+        "bearer_methods_supported": ["header"],
+        "resource": base_url,
+        "resource_documentation": f"{base_url}/docs",
+        "scopes_supported": [],
+    }
 
 # ─── L1 ───
 
@@ -274,8 +316,53 @@ try:
             "L3: Prescriptive Intelligence (Forecast + Optimize + Advise). "
             "All powered by Google OR-Tools."
         ), describe_all_responses=True, describe_full_response_schema=True)
-    mcp.mount()
-    print("✅ MCP server mounted at /mcp")
+    mcp.mount_sse()
+    print("✅ MCP server mounted at /mcp (SSE, open — free tier)")
+
+    # ── MCP v2: Streamable HTTP + OAuth 2.1 ──
+    if _SCALEKIT_READY:
+        # Auth middleware that protects only /mcp/v2
+        @app.middleware("http")
+        async def mcp_v2_auth(request: Request, call_next):
+            if not request.url.path.startswith("/mcp/v2"):
+                return await call_next(request)
+            # Allow .well-known discovery without auth
+            if ".well-known" in request.url.path:
+                return await call_next(request)
+            # Extract Bearer token
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                metadata_url = f"{os.environ.get('BASE_URL', 'https://optim-engine-production.up.railway.app')}/.well-known/oauth-protected-resource"
+                return JSONResponse(
+                    status_code=401,
+                    content={"error": "unauthorized", "message": "Bearer token required"},
+                    headers={"WWW-Authenticate": f'Bearer realm="OAuth", resource_metadata="{metadata_url}"'},
+                )
+            token = auth_header.split("Bearer ")[1].strip()
+            # Validate JWT with ScaleKit's public keys (via PyJWKClient)
+            try:
+                signing_key = _jwks_client.get_signing_key_from_jwt(token)
+                pyjwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["RS256"],
+                    audience=_SCALEKIT_RESOURCE_ID,
+                    issuer=_SCALEKIT_ENV_URL,
+                    options={"require": ["exp", "iss", "aud"]},
+                )
+            except Exception:
+                metadata_url = f"{os.environ.get('BASE_URL', 'https://optim-engine-production.up.railway.app')}/.well-known/oauth-protected-resource"
+                return JSONResponse(
+                    status_code=401,
+                    content={"error": "invalid_token", "message": "Token validation failed"},
+                    headers={"WWW-Authenticate": f'Bearer realm="OAuth", resource_metadata="{metadata_url}"'},
+                )
+            return await call_next(request)
+
+        mcp.mount_http(mount_path="/mcp/v2")
+        print("✅ MCP v2 mounted at /mcp/v2 (Streamable HTTP + OAuth 2.1 via ScaleKit)")
+    else:
+        print("⚠️  ScaleKit not configured — /mcp/v2 not mounted (missing SCALEKIT_* env vars)")
 except ImportError:
     print("⚠️  fastapi-mcp not installed.")
 except Exception as e:
