@@ -221,13 +221,34 @@ async def oauth_protected_resource():
         return JSONResponse(status_code=503, content={"error": "OAuth not configured"})
     return {
         "authorization_servers": [
-            f"{_SCALEKIT_ENV_URL}/resources/{_SCALEKIT_RESOURCE_ID}"
+            os.environ.get("BASE_URL", "https://optim-engine-production.up.railway.app")
         ],
         "bearer_methods_supported": ["header"],
         "resource": base_url,
         "resource_documentation": f"{base_url}/docs",
         "scopes_supported": [],
     }
+
+@app.get("/.well-known/oauth-authorization-server")
+async def oauth_authorization_server():
+    """Proxy ScaleKit's OAuth AS metadata with corrected issuer for RFC 8414 compliance.
+    Smithery requires issuer == authorization_servers URL. ScaleKit sets issuer to the
+    base env URL regardless of the resource path. We serve the metadata ourselves with
+    the issuer set to our own BASE_URL so the match succeeds."""
+    base_url = os.environ.get("BASE_URL", "https://optim-engine-production.up.railway.app")
+    if not _SCALEKIT_ENV_URL or not _SCALEKIT_RESOURCE_ID:
+        return JSONResponse(status_code=503, content={"error": "OAuth not configured"})
+    # Fetch the real metadata from ScaleKit (resource-scoped)
+    try:
+        sk_url = f"{_SCALEKIT_ENV_URL}/resources/{_SCALEKIT_RESOURCE_ID}/.well-known/oauth-authorization-server"
+        req = urllib.request.Request(sk_url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            metadata = _json.loads(resp.read())
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"Failed to fetch ScaleKit metadata: {str(e)}"})
+    # Override issuer to match our authorization_servers URL (RFC 8414 compliance)
+    metadata["issuer"] = base_url
+    return metadata
 
 # ─── L1 ───
 
