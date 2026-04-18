@@ -221,7 +221,7 @@ async def oauth_protected_resource():
         return JSONResponse(status_code=503, content={"error": "OAuth not configured"})
     return {
         "authorization_servers": [
-            f"{_SCALEKIT_ENV_URL}/resources/{_SCALEKIT_RESOURCE_ID}"
+            _SCALEKIT_ENV_URL
         ],
         "bearer_methods_supported": ["header"],
         "resource": base_url,
