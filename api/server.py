@@ -250,6 +250,33 @@ async def oauth_authorization_server():
     metadata["issuer"] = base_url
     return metadata
 
+@app.get("/.well-known/mcp/server-card.json")
+async def mcp_server_card():
+    """Static server card for Smithery discovery — bypasses MCP scanning."""
+    return {
+        "serverInfo": {
+            "name": "OptimEngine",
+            "version": "9.0.0"
+        },
+        "authentication": {
+            "required": True,
+            "schemes": ["oauth2"]
+        },
+        "tools": [
+            {"name": "optimize_schedule", "description": "Solve a Flexible Job Shop Scheduling Problem — OR-Tools CP-SAT with precedence, time windows, setup times, priorities, 4 objectives", "inputSchema": {"type": "object", "properties": {"jobs": {"type": "array"}, "machines": {"type": "array"}, "objective": {"type": "string"}}, "required": ["jobs", "machines"]}},
+            {"name": "validate_schedule", "description": "Validate an existing schedule against constraints", "inputSchema": {"type": "object", "properties": {"jobs": {"type": "array"}, "machines": {"type": "array"}, "schedule": {"type": "array"}}, "required": ["jobs", "machines", "schedule"]}},
+            {"name": "optimize_routing", "description": "Solve a CVRPTW — OR-Tools Routing with capacity, time windows, GPS, drop visits", "inputSchema": {"type": "object", "properties": {"depot_id": {"type": "string"}, "locations": {"type": "array"}, "vehicles": {"type": "array"}, "distance_matrix": {"type": "array"}}, "required": ["depot_id", "locations", "vehicles", "distance_matrix"]}},
+            {"name": "optimize_packing", "description": "Solve a Bin Packing Problem — OR-Tools CP-SAT with weight/volume, groups, partial packing", "inputSchema": {"type": "object", "properties": {"bins": {"type": "array"}, "items": {"type": "array"}, "objective": {"type": "string"}}, "required": ["bins", "items"]}},
+            {"name": "analyze_sensitivity", "description": "Parametric Sensitivity Analysis — perturbs parameters across any L1 solver, returns sensitivity scores, elasticity, risk ranking", "inputSchema": {"type": "object", "properties": {"solver_type": {"type": "string"}, "solver_request": {"type": "object"}}, "required": ["solver_type", "solver_request"]}},
+            {"name": "optimize_robust", "description": "Robust Optimization under Uncertainty — scenario-based worst-case protection with modes: worst_case, percentile_90/95, regret", "inputSchema": {"type": "object", "properties": {"solver_type": {"type": "string"}, "solver_request": {"type": "object"}, "uncertain_parameters": {"type": "array"}}, "required": ["solver_type", "solver_request", "uncertain_parameters"]}},
+            {"name": "optimize_stochastic", "description": "Stochastic Optimization — Monte Carlo simulation with CVaR risk metrics, normal/uniform/triangular/log-normal distributions", "inputSchema": {"type": "object", "properties": {"solver_type": {"type": "string"}, "solver_request": {"type": "object"}, "stochastic_parameters": {"type": "array"}}, "required": ["solver_type", "solver_request", "stochastic_parameters"]}},
+            {"name": "optimize_pareto", "description": "Multi-objective Pareto Frontier — generate trade-off analysis for 2-4 competing objectives", "inputSchema": {"type": "object", "properties": {"solver_type": {"type": "string"}, "objectives": {"type": "array"}, "solver_request": {"type": "object"}}, "required": ["solver_type", "objectives", "solver_request"]}},
+            {"name": "prescriptive_advise", "description": "Prescriptive Intelligence — forecast + optimize + risk assess + actionable recommendations with 3 risk appetites", "inputSchema": {"type": "object", "properties": {"solver_type": {"type": "string"}, "solver_request": {"type": "object"}, "forecast_parameters": {"type": "array"}}, "required": ["solver_type", "solver_request", "forecast_parameters"]}}
+        ],
+        "resources": [],
+        "prompts": []
+    }
+
 # ─── L1 ───
 
 @app.post("/optimize_schedule", response_model=ScheduleResponse, operation_id="optimize_schedule",
