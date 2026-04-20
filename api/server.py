@@ -10,7 +10,6 @@ from threading import Lock
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from solver.models import ScheduleRequest, ScheduleResponse
@@ -98,7 +97,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# CORS middleware intenzionalmente rimosso (19 apr 2026).
+# OptimEngine è server-to-server only: Next.js proxy, MCP client, agent API calls.
+# Nessun browser client legittimo chiama direttamente questo backend.
+# Se un domani serve browser access, aggiungere CORSMiddleware con whitelist esplicita,
+# mai con allow_origins=["*"].
 
 # ── API Key Protection ──
 ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY", "")
