@@ -38,6 +38,15 @@ from pareto.engine import optimize_pareto as run_pareto
 from prescriptive.models import PrescriptiveRequest, PrescriptiveResponse
 from prescriptive.engine import prescriptive_advise as run_prescriptive
 
+# ─── Prometheus metrics ───
+from api.metrics import (
+    PrometheusMiddleware,
+    instrument_solver,
+    verify_metrics_token,
+    metrics_response,
+)
+from fastapi import Depends
+
 # ─── ScaleKit OAuth via PyJWT (MCP v2 auth) ───
 # Uses PyJWT + cryptography to validate ScaleKit-issued JWTs directly,
 # avoiding the scalekit-sdk-python package which conflicts with OR-Tools protobuf.
@@ -98,6 +107,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION, lifespan=lifespan)
 # CORS middleware intenzionalmente rimosso (19 apr 2026).
+
+# ─── Observability ───
+app.add_middleware(PrometheusMiddleware)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics(request: Request, _: None = Depends(verify_metrics_token)):
+    """Prometheus scrape endpoint. Bearer-token protected via METRICS_TOKEN env."""
+    return metrics_response()
 # OptimEngine è server-to-server only: Next.js proxy, MCP client, agent API calls.
 # Nessun browser client legittimo chiama direttamente questo backend.
 # Se un domani serve browser access, aggiungere CORSMiddleware con whitelist esplicita,
@@ -285,6 +303,7 @@ async def mcp_server_card():
 @app.post("/optimize_schedule", response_model=ScheduleResponse, operation_id="optimize_schedule",
     summary="Solve a Flexible Job Shop Scheduling Problem",
     description="OR-Tools CP-SAT. Precedence, time windows, setup times, priorities, 4 objectives.", tags=["L1 - Scheduling"])
+@instrument_solver("/optimize_schedule", objective_path="metrics.makespan")
 async def ep_schedule(request: ScheduleRequest) -> ScheduleResponse:
     return solve_schedule(request)
 
@@ -320,6 +339,7 @@ async def ep_robust(request: RobustRequest) -> RobustResponse:
 @app.post("/optimize_stochastic", response_model=StochasticResponse, operation_id="optimize_stochastic",
     summary="Stochastic Optimization (Monte Carlo + CVaR)",
     description="Monte Carlo simulation with CVaR risk metrics. Normal, uniform, triangular, log-normal distributions.", tags=["L2 - Uncertainty"])
+@instrument_solver("/optimize_stochastic", objective_path="recommended_objective")
 async def ep_stochastic(request: StochasticRequest) -> StochasticResponse:
     return run_stochastic(request)
 
