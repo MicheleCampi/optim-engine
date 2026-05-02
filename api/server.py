@@ -127,7 +127,7 @@ ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY", "")
 @app.middleware("http")
 async def check_engine_key(request: Request, call_next):
     # Public paths - no key required
-    public_paths = ("/", "/health", "/docs", "/openapi.json", "/redoc", "/favicon.ico")
+    public_paths = ("/", "/health", "/docs", "/openapi.json", "/redoc", "/favicon.ico", "/metrics")
     if request.url.path in public_paths or request.url.path.startswith("/mcp") or request.url.path.startswith("/.well-known"):
         return await call_next(request)
     # If ENGINE_API_KEY is set, require it on all solver paths
