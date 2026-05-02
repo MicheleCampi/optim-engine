@@ -12,63 +12,48 @@ Real workload generators (size mix, multi-solver, INFEASIBLE injection)
 are out of scope — see Phase B in the May 23 plan.
 """
 import os
+import random
 from locust import HttpUser, task, between
+
+from load_tests.generators.schedule import random_schedule
+from load_tests.generators.routing import random_routing
+from load_tests.generators.packing import random_packing
 
 
 ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY_PROD", "")
 
 
-# ─── Fixed smoke payloads ───
-# Real workload generators (size mix, INFEASIBLE injection) deferred to Phase B.
+# ─── Size class distribution ───
+# Each call picks a size class according to this mix:
+#   60% small  → fast solves, mostly OPTIMAL
+#   30% medium → real solves, mix OPTIMAL/FEASIBLE
+#   10% large  → heavy solves, mostly FEASIBLE/TIMEOUT
+# This produces a realistic dispersion across solver_duration_seconds buckets.
+SIZE_WEIGHTS = [("small", 0.60), ("medium", 0.30), ("large", 0.10)]
 
-SCHEDULE_PAYLOAD = {
-    "jobs": [
-        {"job_id": "J1", "tasks": [{"task_id": "T1", "duration": 5,
-                                     "eligible_machines": ["M1"]}]},
-        {"job_id": "J2", "tasks": [{"task_id": "T2", "duration": 3,
-                                     "eligible_machines": ["M1"]}]},
-    ],
-    "machines": [{"machine_id": "M1"}],
-    "objective": "minimize_makespan",
-    "max_solve_time_seconds": 5,
-}
 
-ROUTING_PAYLOAD = {
-    "depot_id": "depot",
-    "vehicles": [
-        {"vehicle_id": "V1", "capacity": 100,
-         "start_location": "depot", "end_location": "depot"},
-    ],
-    "locations": [
-        {"location_id": "depot", "latitude": 44.80, "longitude": 10.30, "demand": 0},
-        {"location_id": "L1",    "latitude": 44.81, "longitude": 10.31, "demand": 20},
-        {"location_id": "L2",    "latitude": 44.82, "longitude": 10.32, "demand": 30},
-    ],
-    "max_solve_time_seconds": 5,
-}
-
-PACKING_PAYLOAD = {
-    "items": [
-        {"item_id": "I1", "weight": 5, "value": 10},
-        {"item_id": "I2", "weight": 8, "value": 15},
-        {"item_id": "I3", "weight": 3, "value": 7},
-    ],
-    "bins": [
-        {"bin_id": "B1", "weight_capacity": 10},
-        {"bin_id": "B2", "weight_capacity": 15},
-    ],
-    "max_solve_time_seconds": 5,
-}
+def _pick_size() -> str:
+    r = random.random()
+    cumulative = 0.0
+    for size, weight in SIZE_WEIGHTS:
+        cumulative += weight
+        if r <= cumulative:
+            return size
+    return "small"  # fallback
 
 
 class OptimEngineSmokeUser(HttpUser):
     """
-    Multi-solver smoke user. Calls L1 endpoints with fixed payloads.
+    Multi-solver load test user using parametric problem generators.
 
-    Task weights reflect a rough realistic mix:
+    Task weights reflect realistic domain mix:
       - schedule: 4 (most common in manufacturing)
       - routing:  2 (logistics use case)
       - packing:  1 (specialized bin-packing scenarios)
+
+    Each task additionally rolls a size class (60/30/10 small/medium/large)
+    so the load test produces a distribution of solver outcomes — not all
+    OPTIMAL, not all TIMEOUT.
     """
 
     wait_time = between(2, 5)  # seconds between tasks per user
@@ -85,12 +70,12 @@ class OptimEngineSmokeUser(HttpUser):
 
     @task(4)
     def schedule(self):
-        self._post("/optimize_schedule", SCHEDULE_PAYLOAD)
+        self._post("/optimize_schedule", random_schedule(_pick_size()))
 
     @task(2)
     def routing(self):
-        self._post("/optimize_routing", ROUTING_PAYLOAD)
+        self._post("/optimize_routing", random_routing(_pick_size()))
 
     @task(1)
     def packing(self):
-        self._post("/optimize_packing", PACKING_PAYLOAD)
+        self._post("/optimize_packing", random_packing(_pick_size()))
