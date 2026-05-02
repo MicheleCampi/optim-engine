@@ -314,11 +314,13 @@ async def ep_validate(request: ValidateRequest) -> ValidateResponse:
 
 @app.post("/optimize_routing", response_model=RoutingResponse, operation_id="optimize_routing",
     summary="Solve a CVRPTW", description="OR-Tools Routing. Capacity, time windows, GPS, drop visits.", tags=["L1 - Routing"])
+@instrument_solver("/optimize_routing", objective_path="metrics.total_distance")
 async def ep_routing(request: RoutingRequest) -> RoutingResponse:
     return solve_routing(request)
 
 @app.post("/optimize_packing", response_model=PackingResponse, operation_id="optimize_packing",
     summary="Solve a Bin Packing Problem", description="OR-Tools CP-SAT. Weight/volume, groups, partial packing.", tags=["L1 - Packing"])
+@instrument_solver("/optimize_packing", objective_path="metrics.bins_used")
 async def ep_packing(request: PackingRequest) -> PackingResponse:
     return solve_packing(request)
 
@@ -327,12 +329,14 @@ async def ep_packing(request: PackingRequest) -> PackingResponse:
 @app.post("/analyze_sensitivity", response_model=SensitivityResponse, operation_id="analyze_sensitivity",
     summary="Parametric Sensitivity Analysis",
     description="Perturbs parameters across any L1 solver. Returns sensitivity scores, elasticity, risk ranking.", tags=["L2 - Uncertainty"])
+@instrument_solver("/analyze_sensitivity", objective_path="baseline_objective")
 async def ep_sensitivity(request: SensitivityRequest) -> SensitivityResponse:
     return run_sensitivity(request)
 
 @app.post("/optimize_robust", response_model=RobustResponse, operation_id="optimize_robust",
     summary="Robust Optimization under Uncertainty",
     description="Scenario-based worst-case protection. Modes: worst_case, percentile_90/95, regret_minimization.", tags=["L2 - Uncertainty"])
+@instrument_solver("/optimize_robust", objective_path="robust_solution.objective_value")
 async def ep_robust(request: RobustRequest) -> RobustResponse:
     return run_robust(request)
 
@@ -348,6 +352,7 @@ async def ep_stochastic(request: StochasticRequest) -> StochasticResponse:
 @app.post("/optimize_pareto", response_model=ParetoResponse, operation_id="optimize_pareto",
     summary="Multi-objective Pareto Frontier",
     description="Generate Pareto frontier for 2-4 competing objectives. Trade-off analysis with correlation and spread.", tags=["L2.5 - Multi-objective"])
+@instrument_solver("/optimize_pareto")
 async def ep_pareto(request: ParetoRequest) -> ParetoResponse:
     return run_pareto(request)
 
@@ -361,6 +366,7 @@ async def ep_pareto(request: ParetoRequest) -> ParetoResponse:
         "optimizes using forecasted values, assesses risk across conservative/moderate/aggressive scenarios, "
         "and generates prioritized actionable recommendations. Supports 3 risk appetites."
     ), tags=["L3 - Prescriptive"])
+@instrument_solver("/prescriptive_advise", objective_path="optimization.objective_value")
 async def ep_prescriptive(request: PrescriptiveRequest) -> PrescriptiveResponse:
     return run_prescriptive(request)
 
