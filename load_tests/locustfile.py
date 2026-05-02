@@ -30,7 +30,7 @@ SCHEDULE_PAYLOAD = {
     ],
     "machines": [{"machine_id": "M1"}],
     "objective": "minimize_makespan",
-    "time_limit_seconds": 5,
+    "max_solve_time_seconds": 5,
 }
 
 ROUTING_PAYLOAD = {
