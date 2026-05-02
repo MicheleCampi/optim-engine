@@ -247,9 +247,19 @@ def _record(endpoint: str, result, duration: float, objective_path: str | None) 
 # ─── /metrics Endpoint Auth ─────────────────────────────────────────────
 def verify_metrics_token(request: Request) -> None:
     """
-    Bearer token auth for /metrics endpoint.
-    Token read from METRICS_TOKEN env var. If unset, /metrics is disabled
-    (returns 503) — fail-closed instead of fail-open.
+    Auth for /metrics endpoint. Accepts two envelope schemes:
+
+      - Bearer: ``Authorization: Bearer <METRICS_TOKEN>``
+        Used by curl/manual clients and future Prometheus self-hosted scrapers.
+
+      - Basic:  ``Authorization: Basic base64(<any-username>:<METRICS_TOKEN>)``
+        Used by scrape collectors that only support HTTP Basic Auth
+        (e.g. Grafana Cloud Hosted Collector). Username field is ignored;
+        the password must match METRICS_TOKEN.
+
+    Both schemes verify against the same secret in METRICS_TOKEN env var.
+    If the env var is unset, /metrics is disabled (503 fail-closed).
+    Constant-time comparison prevents timing attacks.
     """
     expected = os.environ.get("METRICS_TOKEN", "")
     if not expected:
@@ -259,14 +269,35 @@ def verify_metrics_token(request: Request) -> None:
         )
 
     auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
 
-    provided = auth_header[7:].strip()
-    # Constant-time comparison to prevent timing attacks
     import hmac
-    if not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=403, detail="Invalid token")
+    import base64
+
+    if auth_header.startswith("Bearer "):
+        provided = auth_header[7:].strip()
+        if not hmac.compare_digest(provided, expected):
+            raise HTTPException(status_code=403, detail="Invalid token")
+        return
+
+    if auth_header.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            raise HTTPException(status_code=401, detail="Malformed Basic Auth header")
+        # Format is "username:password"; username ignored, password must match
+        if ":" not in decoded:
+            raise HTTPException(status_code=401, detail="Malformed Basic Auth credentials")
+        _, _, provided = decoded.partition(":")
+        if not hmac.compare_digest(provided, expected):
+            raise HTTPException(status_code=403, detail="Invalid token")
+        return
+
+    raise HTTPException(
+        status_code=401,
+        detail="Authorization must use Bearer or Basic scheme",
+    )
 
 
 def metrics_response() -> Response:
