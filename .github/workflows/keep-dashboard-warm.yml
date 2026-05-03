@@ -1,0 +1,42 @@
+# Keeps the public Grafana dashboard populated by hitting OptimEngine
+# every 8 hours. Without this, Railway hobby-tier restarts wipe the
+# Prometheus counters and the public dashboard shows "No data" on
+# Status mix and Objective values panels.
+#
+# Schedule: 06:00, 14:00, 22:00 UTC daily (08:00, 16:00, 00:00 CET).
+
+name: Keep public dashboard warm
+
+on:
+  schedule:
+    - cron: '0 6,14,22 * * *'
+  workflow_dispatch:  # allow manual trigger from GitHub UI for debugging
+
+jobs:
+  warm-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Locust
+        run: pip install locust==2.43.4
+
+      - name: Run 4-minute load test
+        env:
+          ENGINE_API_KEY_PROD: ${{ secrets.ENGINE_API_KEY_PROD }}
+        run: |
+          if [ -z "$ENGINE_API_KEY_PROD" ]; then
+            echo "ERROR: ENGINE_API_KEY_PROD secret is not set"
+            exit 1
+          fi
+          locust -f load_tests/locustfile.py \
+            --host=https://optim-engine-production.up.railway.app \
+            --users=2 --spawn-rate=1 --run-time=4m --headless \
+            --only-summary
