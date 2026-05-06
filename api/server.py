@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION, lifespan=lifespan)
-# CORS middleware intenzionalmente rimosso (19 apr 2026).
+# CORS middleware intenzionalmente rimosso (19 apr 2026). Per browser access, vedi optim-engine-proxy.
 
 # ─── Observability ───
 app.add_middleware(PrometheusMiddleware)
@@ -116,10 +116,12 @@ app.add_middleware(PrometheusMiddleware)
 async def metrics(request: Request, _: None = Depends(verify_metrics_token)):
     """Prometheus scrape endpoint. Bearer-token protected via METRICS_TOKEN env."""
     return metrics_response()
-# OptimEngine è server-to-server only: Next.js proxy, MCP client, agent API calls.
-# Nessun browser client legittimo chiama direttamente questo backend.
-# Se un domani serve browser access, aggiungere CORSMiddleware con whitelist esplicita,
-# mai con allow_origins=["*"].
+# OptimEngine è server-to-server only: Smithery, MCP clients, x402 gateways, ACP agents.
+# Nessun browser client chiama direttamente questo backend.
+# Per accesso browser-based (demo embed, claude.ai artifacts, michelecampi.github.io/demo)
+# usare optim-engine-proxy (thin Vercel Edge proxy con CORS whitelist).
+# Live: https://optim-engine-proxy.vercel.app
+# Repo: https://github.com/MicheleCampi/optim-engine-proxy
 
 # ── API Key Protection ──
 ENGINE_API_KEY = os.environ.get("ENGINE_API_KEY", "")
