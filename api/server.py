@@ -2,6 +2,8 @@
 OptimEngine — FastAPI + MCP Server v9.0.0
 Operations Intelligence Solver: L1 + L2 + L2.5 + L3
 """
+from api.observability import init_telemetry, get_tracer
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 import os
 import time
@@ -104,8 +106,11 @@ async def lifespan(app: FastAPI):
     yield
     print(f"👋 {APP_NAME} shutting down.")
 
+init_telemetry()
+
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION, lifespan=lifespan)
+FastAPIInstrumentor.instrument_app(app)
 # CORS middleware intenzionalmente rimosso (19 apr 2026). Per browser access, vedi optim-engine-proxy.
 
 # ─── Observability ───

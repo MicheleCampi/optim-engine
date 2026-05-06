@@ -11,6 +11,11 @@ Supports:
   - Priority-weighted objectives
   - Multiple optimization objectives (makespan, tardiness, load balancing)
 """
+from api.observability import get_tracer
+from opentelemetry.trace import Status, StatusCode
+
+
+tracer = get_tracer(__name__)
 
 import collections
 import time
@@ -70,7 +75,7 @@ def _get_setup_time(matrix: dict, machine_id: str, from_job: str, to_job: str) -
     return 0
 
 
-def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
+def _solve_schedule_impl(request: ScheduleRequest) -> ScheduleResponse:
     """
     Solve a Flexible Job Shop Scheduling Problem.
     
@@ -576,3 +581,29 @@ def _compute_metrics(
         avg_machine_utilization_pct=round(avg_util, 1),
         solve_time_seconds=round(solve_time, 3),
     )
+
+
+def solve_schedule(request: ScheduleRequest) -> ScheduleResponse:
+    """Traced wrapper around _solve_schedule_impl. Adds OTel span with FJSP attributes."""
+    with tracer.start_as_current_span("solve_schedule") as span:
+        n_jobs = len(request.jobs)
+        n_machines = len(request.machines)
+        n_tasks = sum(len(j.tasks) for j in request.jobs)
+        span.set_attribute("optim.n_jobs", n_jobs)
+        span.set_attribute("optim.n_machines", n_machines)
+        span.set_attribute("optim.n_tasks", n_tasks)
+
+        t0 = time.perf_counter()
+        try:
+            response = _solve_schedule_impl(request)
+        except Exception as e:
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
+            raise
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        span.set_attribute("optim.solve_time_ms", round(elapsed_ms, 2))
+        span.set_attribute("optim.solver_status", str(response.status))
+        if response.metrics is not None:
+            span.set_attribute("optim.makespan", response.metrics.makespan)
+        return response

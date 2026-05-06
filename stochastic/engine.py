@@ -8,6 +8,11 @@ Approach:
 3. Build objective distribution and compute risk metrics (CVaR, VaR)
 4. Recommend solution based on chosen risk metric
 """
+from api.observability import get_tracer
+from opentelemetry.trace import Status, StatusCode
+
+tracer = get_tracer(__name__)
+
 
 import copy
 import math
@@ -196,7 +201,7 @@ def _skewness(data: list[float], mean: float, std_dev: float) -> float:
 
 # ─── Main engine ───
 
-def optimize_stochastic(request: StochasticRequest) -> StochasticResponse:
+def _optimize_stochastic_impl(request: StochasticRequest) -> StochasticResponse:
     """Run Monte Carlo stochastic optimization."""
     t0 = time.time()
     total_solves = 0
@@ -403,3 +408,26 @@ def optimize_stochastic(request: StochasticRequest) -> StochasticResponse:
             status="error",
             message=f"Stochastic optimization error: {str(e)}",
         )
+
+
+def optimize_stochastic(request: StochasticRequest) -> StochasticResponse:
+    """Traced wrapper around _optimize_stochastic_impl. Adds OTel span with stochastic attributes."""
+    with tracer.start_as_current_span("optimize_stochastic") as span:
+        span.set_attribute("optim.num_scenarios", request.num_scenarios)
+
+        t0 = time.perf_counter()
+        try:
+            response = _optimize_stochastic_impl(request)
+        except Exception as e:
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
+            raise
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        span.set_attribute("optim.solve_time_ms", round(elapsed_ms, 2))
+        span.set_attribute("optim.status", str(response.status))
+        if response.metrics is not None:
+            span.set_attribute("optim.scenarios_feasible", response.metrics.scenarios_feasible)
+        if response.recommended_objective is not None:
+            span.set_attribute("optim.recommended_objective", response.recommended_objective)
+        return response
