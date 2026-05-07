@@ -28,6 +28,23 @@ logger = logging.getLogger(__name__)
 _initialized = False
 
 
+def _parse_otlp_headers() -> dict:
+    """Parse OTEL_EXPORTER_OTLP_HEADERS env var into a dict for OTLPSpanExporter.
+
+    Format expected: "key1=value1,key2=value2" (OTel spec).
+    Returns empty dict if env var not set.
+    """
+    raw = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "").strip()
+    if not raw:
+        return {}
+    headers = {}
+    for pair in raw.split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            headers[k.strip()] = v.strip()
+    return headers
+
+
 def init_telemetry() -> None:
     """
     Initialize OpenTelemetry tracing globally.
@@ -81,7 +98,7 @@ def init_telemetry() -> None:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
-            otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
+            otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, headers=_parse_otlp_headers())
             provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info(f"OTel OTLP exporter enabled: {otlp_endpoint}")
         except Exception as e:
