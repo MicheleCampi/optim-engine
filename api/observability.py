@@ -98,7 +98,7 @@ def init_telemetry() -> None:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
-            otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, headers=_parse_otlp_headers())
+            otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint.rstrip("/") + "/v1/traces", headers=_parse_otlp_headers())
             provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info(f"OTel OTLP exporter enabled: {otlp_endpoint}")
         except Exception as e:
