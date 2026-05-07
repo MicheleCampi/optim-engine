@@ -15,6 +15,7 @@ To disable telemetry entirely, set OTEL_ENABLED=false.
 from __future__ import annotations
 import os
 import logging
+import urllib.parse
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
 from opentelemetry.sdk.trace import TracerProvider
@@ -41,7 +42,7 @@ def _parse_otlp_headers() -> dict:
     for pair in raw.split(","):
         if "=" in pair:
             k, v = pair.split("=", 1)
-            headers[k.strip()] = v.strip()
+            headers[k.strip()] = urllib.parse.unquote(v.strip())
     return headers
 
 
