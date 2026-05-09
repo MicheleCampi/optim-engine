@@ -56,7 +56,7 @@ class OptimEngineSmokeUser(HttpUser):
     OPTIMAL, not all TIMEOUT.
     """
 
-    wait_time = between(2, 5)  # seconds between tasks per user
+    wait_time = between(float(os.environ.get("LOCUST_WAIT_MIN", "2")), float(os.environ.get("LOCUST_WAIT_MAX", "5")))  # configurable via LOCUST_WAIT_MIN/MAX
 
     def _post(self, path: str, payload: dict) -> None:
         if not ENGINE_API_KEY:
@@ -68,14 +68,14 @@ class OptimEngineSmokeUser(HttpUser):
             name=path,  # group calls per endpoint in Locust stats
         )
 
-    @task(4)
+    @task(int(os.environ.get("WEIGHT_SCHEDULE", "4")))
     def schedule(self):
         self._post("/optimize_schedule", random_schedule(_pick_size()))
 
-    @task(2)
+    @task(int(os.environ.get("WEIGHT_ROUTING", "2")))
     def routing(self):
         self._post("/optimize_routing", random_routing(_pick_size()))
 
-    @task(1)
+    @task(int(os.environ.get("WEIGHT_PACKING", "1")))
     def packing(self):
         self._post("/optimize_packing", random_packing(_pick_size()))
