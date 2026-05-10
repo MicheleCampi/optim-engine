@@ -142,10 +142,12 @@ def _generate_scenarios(
 
 # ─── Solver dispatch ───
 
-def _solve(solver_type: StochasticSolverType, request_data: dict, max_time: int) -> tuple[str, float, str]:
-    request_data = copy.deepcopy(request_data)
-    request_data["max_solve_time_seconds"] = max_time
+def _solve(solver_type: StochasticSolverType, request_data: dict) -> tuple[str, float, str]:
+    """Dispatch to the appropriate solver.
 
+    The caller owns request_data and is responsible for isolation (deepcopy upstream).
+    This function does not mutate its input.
+    """
     if solver_type == StochasticSolverType.SCHEDULING:
         req = ScheduleRequest(**request_data)
         resp = solve_schedule(req)
@@ -237,6 +239,7 @@ def _optimize_stochastic_impl(request: StochasticRequest) -> StochasticResponse:
 
         for i, scenario in enumerate(scenarios):
             scenario_data = copy.deepcopy(data)
+            scenario_data["max_solve_time_seconds"] = request.max_solve_time_seconds
             for path, val in scenario.items():
                 try:
                     orig = _resolve_path(data, path)
@@ -247,9 +250,7 @@ def _optimize_stochastic_impl(request: StochasticRequest) -> StochasticResponse:
                     continue
 
             try:
-                status, obj, obj_name = _solve(
-                    request.solver_type, scenario_data, request.max_solve_time_seconds,
-                )
+                status, obj, obj_name = _solve(request.solver_type, scenario_data)
                 total_solves += 1
             except Exception:
                 outcomes.append(ScenarioOutcome(
