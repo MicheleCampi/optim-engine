@@ -1,5 +1,5 @@
 ortools>=9.15.6755
-fastapi>=0.115.0
+fastapi>=0.136.3
 uvicorn[standard]>=0.30.0
 pydantic>=2.13.4
 fastapi-mcp>=0.4.0
