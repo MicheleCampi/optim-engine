@@ -1,4 +1,4 @@
-ortools>=9.9
+ortools>=9.15.6755
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.7
