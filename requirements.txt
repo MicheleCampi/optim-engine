@@ -3,7 +3,7 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.7
 fastapi-mcp>=0.4.0
-PyJWT>=2.8.0
+PyJWT>=2.13.0
 cryptography>=42.0.0
 prometheus-client>=0.20.0
 
