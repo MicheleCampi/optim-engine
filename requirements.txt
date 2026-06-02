@@ -5,7 +5,7 @@ pydantic>=2.13.4
 fastapi-mcp>=0.4.0
 PyJWT>=2.13.0
 cryptography>=42.0.0
-prometheus-client>=0.20.0
+prometheus-client>=0.25.0
 
 # OpenTelemetry tracing
 opentelemetry-api==1.41.1
