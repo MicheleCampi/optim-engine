@@ -1,6 +1,6 @@
 # ⚡ OptimEngine
 
-**Production optimization platform — 4-layer architecture, OR-Tools CP-SAT, MCP-native, OAuth 2.1, observability-first.**
+**Optimization service — 4-layer architecture, OR-Tools CP-SAT, MCP-native, OAuth 2.1, observability-first.**
 
 [![Tests](https://github.com/MicheleCampi/optim-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/MicheleCampi/optim-engine/actions/workflows/tests.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
@@ -14,7 +14,7 @@
 
 OptimEngine solves NP-hard optimization problems (scheduling, routing, packing) and quantifies risk under uncertainty (sensitivity, robust, stochastic, Pareto). It exposes 11 tools across 4 intelligence levels (L1 deterministic → L3 prescriptive) over both REST and MCP (SSE + Streamable HTTP with OAuth 2.1).
 
-The system is built around three engineering principles: **mathematical correctness** (real CP-SAT solvers, not LLM approximations), **production hygiene** (full observability stack, test coverage on business logic, load-tested), and **agent-friendliness** (MCP dual-stack, OAuth, rate limiting, JSON-only contracts).
+The system is built around three engineering principles: **mathematical correctness** (real CP-SAT solvers, not LLM approximations), **operational hygiene** (full observability stack, test coverage on business logic, load-tested), and **agent-friendliness** (MCP dual-stack, OAuth, rate limiting, JSON-only contracts).
 
 ## Architecture
 
@@ -76,7 +76,7 @@ Four layers plus edge proxy, deployed across 6 Railway services + 1 Vercel funct
 
 ## Performance
 
-Production benchmark summary (full report: [`BENCHMARKS.md`](./BENCHMARKS.md)):
+Load-test benchmark summary (full report: [`BENCHMARKS.md`](./BENCHMARKS.md)):
 
 - **757 requests served, 0 failures** across 20 minutes of cumulative load
 - **Infrastructure floor: ~200 ms** (FastAPI + edge proxy + auth + observability overhead)
@@ -202,7 +202,7 @@ Synthetic dataset modeled after Italian precision-machining workshops — 4 CNC 
 
 > Customer names in the dataset are illustrative. This is not a live customer deployment; it's a benchmark scenario used for solver validation and demo purposes.
 
-## Production Deployment
+## Deployment
 
 | Endpoint                                          | Role                                              |
 |---------------------------------------------------|---------------------------------------------------|
