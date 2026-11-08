@@ -6,7 +6,7 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![Live](https://img.shields.io/badge/live-optim--engine--production.up.railway.app-brightgreen)](https://optim-engine-production.up.railway.app)
+[![Production](https://img.shields.io/badge/production-Feb--Oct%202026-lightgrey)](#production-history-feb-oct-2026)
 
 ---
 
@@ -29,7 +29,7 @@ flowchart TB
     L3 --> Obs
 ```
 
-Four layers plus edge proxy, deployed across 6 Railway services + 1 Vercel function. All layers instrumented with OpenTelemetry tracing, Prometheus middleware, and Telegram alerting on payment events.
+Four layers plus edge proxy, deployed across 6 Railway services + 1 Vercel function from February to 23 October 2026, then shut down to stop costs. All layers instrumented with OpenTelemetry tracing, Prometheus middleware, and Telegram alerting on payment events.
 
 ## Tech Stack
 
@@ -42,7 +42,7 @@ Four layers plus edge proxy, deployed across 6 Railway services + 1 Vercel funct
 | Observability    | OpenTelemetry SDK, Prometheus client, Grafana Cloud               |
 | Load testing     | Locust 2.43                                                       |
 | CI               | GitHub Actions, pytest, pytest-cov                                |
-| Deploy           | Railway (compute), Vercel (edge), GitHub Actions (CI)             |
+| Deploy           | Docker (local); Railway + Vercel until Oct 2026; GitHub Actions   |
 
 ## Capabilities
 
@@ -80,10 +80,10 @@ Load-test benchmark summary (full report: [`BENCHMARKS.md`](./BENCHMARKS.md)):
 
 - **757 requests served, 0 failures** across 20 minutes of cumulative load
 - **Infrastructure floor: ~200 ms** (FastAPI + edge proxy + auth + observability overhead)
-- **Saturation knee at 5 concurrent users** on current Railway tier; system degrades gracefully past it
+- **Saturation knee at 5 concurrent users** on the Railway tier used in production; system degrades gracefully past it
 - **Bottleneck: solver CPU**, not infrastructure — scaling path is horizontal at L1, not vertical at the gateway
 
-Live Grafana dashboard: [public-dashboards/optimengine](https://optimengine.grafana.net/public-dashboards/21137ba340fc4b6e917a4b108db3e109)
+The public Grafana dashboard was retired together with the deployment.
 
 ## Testing & CI
 
@@ -140,28 +140,20 @@ Four scheduling-engine upgrades that close the gap between academic FJSP and how
 }
 ```
 
-## Quick Start
+## Quick Start (local)
 
-### claude.ai (Remote MCP connector)
+The hosted deployment ran on Railway from February to 23 October 2026 and is now shut down to stop costs. Everything below runs locally with Docker; verified on 2026-11-08 with the exact payload shown.
 
-Add as a Remote MCP connector under Settings → Integrations:
-
-```
-https://optim-engine-production.up.railway.app/mcp
-```
-
-For OAuth-protected endpoint:
-
-```
-https://optim-engine-production.up.railway.app/mcp/v2
+```bash
+docker build -t optim-engine .
+docker run --rm -p 8080:8080 -e PORT=8080 optim-engine
 ```
 
 ### REST (curl)
 
 ```bash
-curl -X POST https://optim-engine-production.up.railway.app/optimize_schedule \
+curl -X POST localhost:8080/optimize_schedule \
   -H "Content-Type: application/json" \
-  -H "X-Engine-Key: $ENGINE_API_KEY" \
   -d '{
     "jobs": [
       {"job_id": "J1", "tasks": [
@@ -174,17 +166,23 @@ curl -X POST https://optim-engine-production.up.railway.app/optimize_schedule \
   }'
 ```
 
-### MCP client config
+Returns `"status": "optimal"`, makespan 50. Set `ENGINE_API_KEY` to require an `X-Engine-Key` header on solver paths.
+
+### MCP
+
+SSE transport at `http://localhost:8080/mcp`:
 
 ```json
 {
   "mcpServers": {
     "optim-engine": {
-      "url": "https://optim-engine-production.up.railway.app/mcp"
+      "url": "http://localhost:8080/mcp"
     }
   }
 }
 ```
+
+`/mcp/v2` (Streamable HTTP + OAuth 2.1 via ScaleKit) is mounted only when the `SCALEKIT_*` environment variables are set.
 
 ## Validation Case Study: MetalPrecision (synthetic)
 
@@ -202,17 +200,21 @@ Synthetic dataset modeled after Italian precision-machining workshops — 4 CNC 
 
 > Customer names in the dataset are illustrative. This is not a live customer deployment; it's a benchmark scenario used for solver validation and demo purposes.
 
-## Deployment
+## Production history (Feb-Oct 2026)
 
-| Endpoint                                          | Role                                              |
+From 22 February to 23 October 2026 the service ran in production, then was shut down to stop costs:
+
+| Endpoint (retired)                                | Role                                              |
 |---------------------------------------------------|---------------------------------------------------|
 | `optim-engine-production.up.railway.app`          | L1 + L2 + L3 compute (Railway, 6 services)        |
 | Edge proxy (Vercel)                               | CORS handling, header rewriting, edge caching     |
 | MCP connector on claude.ai                        | Tool surface for Claude clients                   |
 
+The load-test numbers above were measured on that deployment.
+
 ## Discovery
 
-Listed for agent-economy discovery on **x402scan**, **Smithery**, and **the402.ai**. The system supports x402 micropayments on Base and Solana for paid-tier endpoints; payment integration is documented in the L3 thin-proxy layer but is not the project's primary focus.
+While in production it was listed for agent-economy discovery on **x402scan**, **Smithery**, and **the402.ai**. The system supports x402 micropayments on Base and Solana for paid-tier endpoints; payment integration is documented in the L3 thin-proxy layer but is not the project's primary focus.
 
 ## License
 
